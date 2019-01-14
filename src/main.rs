@@ -1,7 +1,8 @@
 use std::env;
 use std::process;
-use std::error::Error;
-use std::fs;
+
+extern crate mergebg;
+use mergebg::Config;
 
 fn main() {
     let args: Vec<String> = env::args().collect();
@@ -14,35 +15,9 @@ fn main() {
     println!("File1: {}", config.filename1);
     println!("File2: {}", config.filename2);
     
-    if let Err(e) = run(config) {
+    if let Err(e) = mergebg::run(config) {
         println!("Application Error: {}", e);
 
         process::exit(1);
-    }
-}
-
-fn run(config: Config) -> Result<(), Box<dyn Error>> {
-    let contents1 = fs::read_to_string(config.filename1)?;
-    let contents2 = fs::read_to_string(config.filename2)?;
-
-    println!("File1 data:\n{}", contents1);
-    println!("File2 data:\n{}", contents2);
-    Ok(())
-}
-
-struct Config {
-    filename1: String,
-    filename2: String,
-}
-
-impl Config {
-    fn new(args: &[String]) -> Result<Config, &'static str> {
-        if args.len() < 3 {
-            return Err("Not enough arguments.");
-        }
-        let filename1 = args[1].clone();
-        let filename2 = args[2].clone();
-    
-        Ok(Config {filename1, filename2})
     }
 }
