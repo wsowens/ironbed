@@ -1,9 +1,23 @@
+use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
     let bedf = BedGraphReader::new(&args[1]);
+}
+
+#[derive(Debug)]
+struct ChromPos {
+    chrom: String,
+    start: u32,
+    stop: u32,
+}
+
+impl fmt::Display for ChromPos {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "{}\t{}\t{}", self.chrom, self.start, self.stop)
+    }
 }
 
 struct BedGraphReader {
