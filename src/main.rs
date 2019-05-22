@@ -218,4 +218,42 @@ mod tests {
         assert_eq!(bgs[0].next(), None);
         assert_eq!(bgs[1].next(), None);
     }
+
+    #[test]
+    fn union_uneven_loop() {
+        let filenames = vec!["test/unionbedg/1.bg", "test/unionbedg/2.bg", "test/unionbedg/long.bg"];
+        let mut bgs: Vec<BedGraphReader> = filenames.iter().map(|fname| BedGraphReader::new(&fname.to_string()).unwrap()).collect();
+        assert_eq!(bgs[0].coords, None);
+        assert_eq!(bgs[1].coords, None);
+        assert_eq!(bgs[2].coords, None);
+        let mut all_none = true;
+        for bg in &mut bgs {
+            match bg.next() {
+                Some(_) => { all_none = false }
+                _ => continue
+            }
+        }
+        assert_eq!(all_none, false);
+        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500}));
+        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600}));
+        assert_eq!(bgs[2].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 2000}));
+        while !all_none {
+            all_none = true;
+            for bg in &mut bgs {
+                match bg.next() {
+                    Some(_) => { all_none = false }
+                    _ => continue
+                }
+            }
+        }
+        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100}));
+        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050}));
+        assert_eq!(bgs[2].coords, Some(ChromPos{chrom: "chr6".to_string(), start: 5000, stop: 7533}));
+        assert_eq!(bgs[0].data, Some(String::from("20")));
+        assert_eq!(bgs[1].data, Some(String::from("50")));
+        assert_eq!(bgs[2].data, Some(String::from("43")));
+        assert_eq!(bgs[0].next(), None);
+        assert_eq!(bgs[1].next(), None);
+        assert_eq!(bgs[2].next(), None);
+    }
 }
