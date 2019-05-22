@@ -3,33 +3,28 @@ use std::io::{BufRead, BufReader};
 
 fn main() {
     let args: Vec<String> = std::env::args().collect();
-    let bedf = BedGraph::new(&args[1]);
-    match bedf {
-        Ok(x) => run(x),
-        Err(msg) => eprintln!("{}", msg),
-    }
+    let bedf = BedGraphReader::new(&args[1]);
 }
 
-struct BedGraph
-{
+struct BedGraphReader {
     // add in trait based generics?
     filename: String,
     reader: BufReader<File>,
     lineno: u32,
 }
 
-impl BedGraph {
-    fn new(fname: &String) -> Result<BedGraph, String> {
+impl BedGraphReader {
+    fn new(fname: &String) -> Result<BedGraphReader, String> {
         let filename = fname.clone();
         match File::open(&fname) {
             Err(x) => Err(x.to_string()),
             Ok(handle) =>
-                 Ok( BedGraph{filename, reader: BufReader::new(handle), lineno: 0}   )
+                 Ok( BedGraphReader{filename, reader: BufReader::new(handle), lineno: 0}   )
           }
     }
 }
 
-impl Iterator for BedGraph {
+impl Iterator for BedGraphReader {
     type Item = String;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -49,10 +44,23 @@ impl Iterator for BedGraph {
     }
 }
 
-fn run(mut bedf: BedGraph) {
-    for _ in &mut bedf {
+fn total_lines(mut bg: BedGraphReader) -> u32 {
+    for _ in &mut bg {
 
     }
-    println!("Total length: {}", &bedf.lineno);
+    bg.lineno
+}
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn line_count() {
+        //create a bedgraph reader for a test file with 9 lines
+        let filename = String::from("test/unionbedg/1+2+3.bg");
+        let mut bedgraph = BedGraphReader::new(&filename).unwrap();
+        //check the number of lines
+        assert_eq!(total_lines(bedgraph), 9);
+    }
 }
