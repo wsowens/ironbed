@@ -26,13 +26,38 @@ impl fmt::Display for ChromPos {
     }
 }
 
+#[derive(Debug, PartialEq, Eq)]
+struct BedGraphLine {
+    coords: ChromPos,
+    data: Option<String>,
+}
+
+impl BedGraphLine {
+    fn new(input_str: &String) -> Result<BedGraphLine, String> {
+        //TODO: avoid iterating over the entire line by using enumerate
+        let cols: Vec<&str> = input_str.split_whitespace().collect();
+        if cols.len() < 3 {
+            Err(format!("Invalid number of columns [{}] in line:\n{}", cols.len(), input_str))
+        } else {
+            //use lifetimes to make this work, instead of copying the string
+            let chrom = cols[0].to_string();
+            let start: u32 = cols[1].parse().unwrap();
+            let stop:  u32 = cols[2].parse().unwrap();
+            if cols.len() > 3 {
+                Ok( BedGraphLine{coords: ChromPos{chrom, start, stop}, data: Some(cols[3..].join("\t")) } )
+            } else {
+                Ok( BedGraphLine{coords: ChromPos{chrom, start, stop}, data: None} )
+            }
+        }
+    }
+}
+
 #[derive(Debug)]
 struct BedGraphReader {
     filename: String,
     reader: BufReader<File>,
     // should this be lazily evaluated?
-    coords: Option<ChromPos>,
-    data: Option<String>,
+    last_line: Option<BedGraphLine>,
     lineno: u32,
 }
 
@@ -43,13 +68,14 @@ impl BedGraphReader {
         match File::open(&fname) {
             Err(x) => Err(x.to_string()),
             Ok(handle) =>
-                 Ok( BedGraphReader{filename, reader: BufReader::new(handle), coords: None, data: None, lineno: 0}   )
+                 Ok( BedGraphReader{filename, reader: BufReader::new(handle), last_line: None, lineno: 0}   )
           }
     }
 }
 
 impl Iterator for BedGraphReader {
-    type Item = String;
+    //TODO: make this more efficient with references / lifetimes
+    type Item = BedGraphLine;
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut temp = String::new();
@@ -60,10 +86,9 @@ impl Iterator for BedGraphReader {
                     0 => None,
                     _ => {
                         self.lineno += 1;
-                        let (coords, data) = extract_coords(&temp).unwrap();
-                        self.coords = Some(coords);
-                        self.data = Some(data);
-                        Some(temp)
+                        self.last_line = Some(BedGraphLine::new(&temp).unwrap());
+                        //HORRIBLY INEFFICIENT, USE REFERENCES AND LIFETIMES
+                        Some(BedGraphLine::new(&temp).unwrap())
                     }
                 }
             }
@@ -85,60 +110,22 @@ impl BedGraphUnion {
             Ok(BedGraphUnion{members: filenames.iter().map(|filename| BedGraphReader::new(filename).unwrap()).collect()})
         }
     }
-
-    /*
-    fn min_start(&self) -> u32 {
-        let min: u32 = 
-    }
-    
-    fn min_stop(&self) -> u32 {
-
-    }
-    */
 }
 
-/*
 impl Iterator for BedGraphUnion {
-    fn next(&mut self) -> Option<Vec<String>> {
+    type Item = u32;
 
+    fn next(&mut self) -> Option<Self::Item> {
+        None
     }
 }
-*/
-fn extract_coords(line: &String) -> Result<(ChromPos, String), String> {
-    //TODO: avoid iterating over the entire line by using enumerate
-    let cols:Vec<&str> = line.split_whitespace().collect();
-    if cols.len() < 3 {
-        Err(format!("Invalid number of columns [{}] in line:\n{}", cols.len(), line))
-    } else {
-        //use lifetimes to make this work, instead of copying the string
-        let chrom = cols[0].to_string();
-        //TODO: provide a more useful error message for these
-        let start: u32 = cols[1].parse().unwrap();
-        let stop:  u32 = cols[2].parse().unwrap();
 
-        if cols.len() > 3 {
-            Ok((ChromPos{chrom, start, stop}, cols[3..].join("\t")))
-        } else {
-            Ok((ChromPos{chrom, start, stop}, "".to_string()))
-        }
-    }
-}
 
 fn total_lines(mut bg: BedGraphReader) -> u32 {
     for _ in &mut bg {
         //iterate over the entire BedGraph
     }
     bg.lineno
-}
-
-fn all_none<T>(items: Vec<Option<T>>) -> bool {
-    for i in items {
-        match i {
-            None => return false,
-            _ => continue
-        }
-    }
-    true
 }
 
 fn union(mut bedgraphs: Vec<&mut BedGraphReader>) {
@@ -173,25 +160,42 @@ mod tests {
     #[test]
     fn chrom_pos() {
         let mut bedgraph = BedGraphReader::new(&"test/unionbedg/1+2+3.bg".to_string()).unwrap();
-        assert_eq!(bedgraph.coords, None);
+        assert_eq!(bedgraph.last_line, None);
         bedgraph.next();
-        assert_eq!(bedgraph.coords, Some(ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1000}))
+        assert_eq!(bedgraph.last_line.unwrap().coords, ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1000})
     }
 
     #[test]
     fn get_bg_data() {
         let mut bedgraph = BedGraphReader::new(&"test/unionbedg/1+2+3.bg".to_string()).unwrap();
-        assert_eq!(bedgraph.data, None);
+        assert_eq!(bedgraph.last_line, None);
         bedgraph.next();
-        assert_eq!(bedgraph.data, Some(String::from("0\t60\t0")));
+        assert_eq!(bedgraph.last_line.unwrap().data, Some(String::from("0\t60\t0")));
     }
+
+    fn assert_coords(bg: &BedGraphReader, coords: ChromPos) {
+        if let Some(ref bg_line) = bg.last_line {
+            assert_eq!(bg_line.coords, coords);
+        } else {
+            panic!(format!("Last line is None: {:?}", bg));
+        }
+    }
+
+    fn assert_data(bg: &BedGraphReader, data: Option<String>) {
+        if let Some(ref bg_line) = bg.last_line {
+            assert_eq!(bg_line.data, data);
+        } else {
+            panic!(format!("Last line is None: {:?}", bg));
+        }
+    }
+
 
     #[test]
     fn union_loop() {
         let filenames = vec!["test/unionbedg/1.bg", "test/unionbedg/2.bg"];
         let mut bgs: Vec<BedGraphReader> = filenames.iter().map(|fname| BedGraphReader::new(&fname.to_string()).unwrap()).collect();
-        assert_eq!(bgs[0].coords, None);
-        assert_eq!(bgs[1].coords, None);
+        assert_eq!(bgs[0].last_line, None);
+        assert_eq!(bgs[1].last_line, None);
         let mut all_none = true;
         for bg in &mut bgs {
             match bg.next() {
@@ -200,8 +204,8 @@ mod tests {
             }
         }
         assert_eq!(all_none, false);
-        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500}));
-        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600}));
+        assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500});
+        assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600});
         while !all_none {
             all_none = true;
             for bg in &mut bgs {
@@ -211,21 +215,21 @@ mod tests {
                 }
             }
         }
-        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100}));
-        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050}));
-        assert_eq!(bgs[0].data, Some(String::from("20")));
-        assert_eq!(bgs[1].data, Some(String::from("50")));
-        assert_eq!(bgs[0].next(), None);
-        assert_eq!(bgs[1].next(), None);
+        //assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100});
+        //assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050});
+        //assert_data(&bgs[0], Some(String::from("20")));
+        //assert_data(&bgs[1], Some(String::from("50")));
+        //assert_eq!(bgs[0].next(), None);
+        //assert_eq!(bgs[1].next(), None);
     }
 
     #[test]
     fn union_uneven_loop() {
         let filenames = vec!["test/unionbedg/1.bg", "test/unionbedg/2.bg", "test/unionbedg/long.bg"];
         let mut bgs: Vec<BedGraphReader> = filenames.iter().map(|fname| BedGraphReader::new(&fname.to_string()).unwrap()).collect();
-        assert_eq!(bgs[0].coords, None);
-        assert_eq!(bgs[1].coords, None);
-        assert_eq!(bgs[2].coords, None);
+        assert_eq!(bgs[0].last_line, None);
+        assert_eq!(bgs[1].last_line, None);
+        assert_eq!(bgs[2].last_line, None);
         let mut all_none = true;
         for bg in &mut bgs {
             match bg.next() {
@@ -234,9 +238,9 @@ mod tests {
             }
         }
         assert_eq!(all_none, false);
-        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500}));
-        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600}));
-        assert_eq!(bgs[2].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 2000}));
+        assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500});
+        assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600});
+        assert_coords(&bgs[2], ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 2000});
         while !all_none {
             all_none = true;
             for bg in &mut bgs {
@@ -246,12 +250,12 @@ mod tests {
                 }
             }
         }
-        assert_eq!(bgs[0].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100}));
-        assert_eq!(bgs[1].coords, Some(ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050}));
-        assert_eq!(bgs[2].coords, Some(ChromPos{chrom: "chr6".to_string(), start: 5000, stop: 7533}));
-        assert_eq!(bgs[0].data, Some(String::from("20")));
-        assert_eq!(bgs[1].data, Some(String::from("50")));
-        assert_eq!(bgs[2].data, Some(String::from("43")));
+        assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100});
+        assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050});
+        assert_coords(&bgs[2], ChromPos{chrom: "chr6".to_string(), start: 5000, stop: 7533});
+        assert_data(&bgs[0], Some(String::from("20")));
+        assert_data(&bgs[1], Some(String::from("50")));
+        assert_data(&bgs[2], Some(String::from("43")));
         assert_eq!(bgs[0].next(), None);
         assert_eq!(bgs[1].next(), None);
         assert_eq!(bgs[2].next(), None);
