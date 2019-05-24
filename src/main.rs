@@ -33,7 +33,7 @@ struct BedGraphLine {
 }
 
 impl BedGraphLine {
-    fn new(input_str: &String) -> Result<BedGraphLine, String> {
+    fn new(input_str: &str) -> Result<BedGraphLine, String> {
         //TODO: avoid iterating over the entire line by using enumerate
         let cols: Vec<&str> = input_str.split_whitespace().collect();
         if cols.len() < 3 {
@@ -68,42 +68,45 @@ impl BedGraphReader {
         match File::open(fname) {
             Err(x) => Err(x.to_string()),
             Ok(handle) =>
-                 Ok( BedGraphReader{filename: fname.to_string(), reader: BufReader::new(handle), last_line: None, lineno: 0, new_chrom: false}   )
+                 Ok( BedGraphReader{filename: fname.to_string(), reader: BufReader::new(handle), last_line: None, lineno: 0, new_chrom: true}   )
           }
     }
-}
 
-impl Iterator for BedGraphReader {
-    //TODO: make this more efficient with references / lifetimes
-    type Item = BedGraphLine;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        //TODO: allocate to be the size of the previous line?
+    //consider adding a flag, "done", when they hit the end of file
+    fn read_line(&mut self) {
+        //put a new buffer here
         let mut temp = String::new();
         match self.reader.read_line(&mut temp) {
-            Err(err) => {eprintln!("{}", err.to_string()); None},
+            Err(err) => {eprintln!("{}", err.to_string()); self.last_line = None;},
             Ok(bytes) => {
                 match bytes {
-                    0 => None,
-                    _ => {
+                    0 => {
+                        self.last_line = None;
+                        eprintln!("Epic");
+                    } _ => {
                         self.lineno += 1;
                         let new_line = BedGraphLine::new(&temp).unwrap();
                         if let Some(ref line) = self.last_line {
                             self.new_chrom = line.coords.chrom != line.coords.chrom;
                         }
-                        self.last_line = Some(BedGraphLine::new(&temp).unwrap());
-                        //HORRIBLY INEFFICIENT, USE REFERENCES AND LIFETIMES
-                        Some(BedGraphLine::new(&temp).unwrap())
+                        self.last_line = Some(new_line);
                     }
                 }
             }
         }
     }
+
+    fn read_line_until(&mut self, chrom: &ChromPos, stop: u32) {
+
+    }
 }
 
-//TODO: consider abstacting this into a generic "Union" iterator
+/*TODO: create a separate iterator that returns references */
+
 struct BedGraphUnion {
     members: Vec<BedGraphReader>,
+    //the position of the last truncation
+    last_stop: Option<(String, u32)>,
 }
 
 impl BedGraphUnion {
@@ -112,7 +115,7 @@ impl BedGraphUnion {
         if filenames.len() < 2 {
             Err(&"Not enough files to create a union.")
         } else {
-            Ok(BedGraphUnion{members: filenames.iter().map(|filename| BedGraphReader::new(filename).unwrap()).collect()})
+            Ok(BedGraphUnion{members: filenames.iter().map(|filename| BedGraphReader::new(filename).unwrap()).collect(), last_stop: None})
         }
     }
 }
@@ -123,13 +126,15 @@ impl Iterator for BedGraphUnion {
     fn next(&mut self) -> Option<Self::Item> {
         let mut all_none = true;
         let mut lines: Vec<Option<BedGraphLine>> = Vec::with_capacity(self.members.len());
+        //include a "new chrom field" that requires checking of strings
+        //let mut min_start_pos: Option<(String, u32)> = None;
+        //let mut min_stop_pos:  Option<(String, u32)> = None;
         for bg in &mut self.members {
-            let bg_line = bg.next();
-            match bg_line {
-                Some(_) => { all_none = false }
-                _ => continue
+            let ref bg_option = bg.last_line;
+            if let Some(_) = bg_option {
+                all_none = false;
             }
-            lines.push(bg_line);
+            //lines.push();
         }
         if all_none {
             None
@@ -139,15 +144,15 @@ impl Iterator for BedGraphUnion {
     }
 }
 
-
-fn total_lines(mut bg: BedGraphReader) -> u32 {
-    for _ in &mut bg {
-        //iterate over the entire BedGraph
+fn total_lines(bg: &mut BedGraphReader) -> u32 {
+    bg.read_line();
+    while let Some(_) = bg.last_line {
+        bg.read_line();
     }
     bg.lineno
 }
 
-fn union(mut bedgraphs: BedGraphUnion) {
+fn union(bedgraphs: BedGraphUnion) {
     //TODO: consider refining this into an iterator
     for round in bedgraphs {
         println!("{:?}", round);
@@ -163,14 +168,14 @@ mod tests {
         //create a bedgraph reader for a test file with 9 lines
         let mut bedgraph = BedGraphReader::new("test/unionbedg/1+2+3.bg").unwrap();
         //check the number of lines
-        assert_eq!(total_lines(bedgraph), 9);
+        assert_eq!(total_lines(&mut bedgraph), 9);
     }
 
     #[test]
     fn chrom_pos() {
         let mut bedgraph = BedGraphReader::new("test/unionbedg/1+2+3.bg").unwrap();
         assert_eq!(bedgraph.last_line, None);
-        bedgraph.next();
+        bedgraph.read_line();
         assert_eq!(bedgraph.last_line.unwrap().coords, ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1000})
     }
 
@@ -178,7 +183,7 @@ mod tests {
     fn get_bg_data() {
         let mut bedgraph = BedGraphReader::new("test/unionbedg/1+2+3.bg").unwrap();
         assert_eq!(bedgraph.last_line, None);
-        bedgraph.next();
+        bedgraph.read_line();
         assert_eq!(bedgraph.last_line.unwrap().data, Some(String::from("0\t60\t0")));
     }
 
@@ -207,7 +212,8 @@ mod tests {
         assert_eq!(bgs[1].last_line, None);
         let mut all_none = true;
         for bg in &mut bgs {
-            match bg.next() {
+            bg.read_line();
+            match bg.last_line {
                 Some(_) => { all_none = false }
                 _ => continue
             }
@@ -215,23 +221,23 @@ mod tests {
         assert_eq!(all_none, false);
         assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 1500});
         assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600});
-        while !all_none {
-            all_none = true;
-            for bg in &mut bgs {
-                match bg.next() {
-                    Some(_) => { all_none = false }
-                    _ => continue
-                }
+        for bg in &mut bgs {
+            bg.read_line();
+            match bg.last_line {
+                Some(_) => { all_none = false }
+                _ => continue
             }
         }
         assert_coords(&bgs[0], ChromPos{chrom: "chr1".to_string(), start: 2000, stop: 2100});
         assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 1700, stop: 2050});
         assert_data(&bgs[0], Some(String::from("20")));
         assert_data(&bgs[1], Some(String::from("50")));
-        assert_eq!(bgs[0].next(), None);
-        assert_eq!(bgs[1].next(), None);
+        bgs[0].read_line();
+        bgs[1].read_line();
+        assert_eq!(bgs[0].last_line, None);
+        assert_eq!(bgs[1].last_line, None);
     }
-
+    /*
     #[test]
     fn union_uneven_loop() {
         let filenames = vec!["test/unionbedg/1.bg", "test/unionbedg/2.bg", "test/unionbedg/long.bg"];
@@ -241,7 +247,8 @@ mod tests {
         assert_eq!(bgs[2].last_line, None);
         let mut all_none = true;
         for bg in &mut bgs {
-            match bg.next() {
+            bg.read_line();
+            match bg.last_line {
                 Some(_) => { all_none = false }
                 _ => continue
             }
@@ -251,9 +258,9 @@ mod tests {
         assert_coords(&bgs[1], ChromPos{chrom: "chr1".to_string(), start: 900, stop: 1600});
         assert_coords(&bgs[2], ChromPos{chrom: "chr1".to_string(), start: 1000, stop: 2000});
         while !all_none {
-            all_none = true;
             for bg in &mut bgs {
-                match bg.next() {
+                bg.read_line();
+                match bg.last_line {
                     Some(_) => { all_none = false }
                     _ => continue
                 }
@@ -265,8 +272,11 @@ mod tests {
         assert_data(&bgs[0], Some(String::from("20")));
         assert_data(&bgs[1], Some(String::from("50")));
         assert_data(&bgs[2], Some(String::from("43")));
-        assert_eq!(bgs[0].next(), None);
-        assert_eq!(bgs[1].next(), None);
-        assert_eq!(bgs[2].next(), None);
-    }
+        bgs[0].read_line();
+        bgs[1].read_line();
+        bgs[2].read_line();
+        assert_eq!(bgs[0].last_line, None);
+        assert_eq!(bgs[1].last_line, None);
+        assert_eq!(bgs[2].last_line, None);
+    } */
 }
