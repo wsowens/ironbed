@@ -50,6 +50,47 @@ impl BedGraphLine {
             }
         }
     }
+
+    fn truncate(&mut self, start: u32) {
+        self.coords.start = start;
+    }
+}
+
+struct BedGraphIterator {
+    reader: BufReader<File>,
+    lineno: u32
+}
+
+impl BedGraphIterator {
+    fn new(fname: &str) -> Result<BedGraphIterator, String> {
+        //consider removing... this information is in the reader
+        match File::open(fname) {
+            Err(x) => Err(x.to_string()),
+            Ok(handle) =>
+                 Ok( BedGraphIterator{ reader: BufReader::new(handle), lineno: 0 }   )
+          }
+    }
+}
+
+impl Iterator for BedGraphIterator {
+    type Item = BedGraphLine;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        //TODO: allocate to be the size of the previous line?
+        let mut temp = String::new();
+        match self.reader.read_line(&mut temp) {
+            Err(err) => {eprintln!("{}", err.to_string()); None},
+            Ok(bytes) => {
+                match bytes {
+                    0 => None,
+                    _ => {
+                        self.lineno += 1;
+                        Some(BedGraphLine::new(&temp).unwrap())
+                    }
+                }
+            }
+        }
+    }
 }
 
 #[derive(Debug)]
@@ -185,6 +226,13 @@ mod tests {
         assert_eq!(bedgraph.last_line, None);
         bedgraph.read_line();
         assert_eq!(bedgraph.last_line.unwrap().data, Some(String::from("0\t60\t0")));
+    }
+
+    #[test]
+    fn test_truncate() {
+        let mut line = BedGraphLine::new("chr1 900 1600 37").unwrap();
+        line.truncate(950);
+        assert_eq!(line, BedGraphLine::new("chr1 950 1600 37").unwrap());
     }
 
     fn assert_coords(bg: &BedGraphReader, coords: ChromPos) {
