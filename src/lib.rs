@@ -106,7 +106,7 @@ pub mod bedgraph {
 
         //TODO: implement this
         fn starts_before(&self, pos: &chrom_geo::ChromPos) -> bool {
-            false
+            return 
         }
     
         //TODO: implement this
@@ -163,6 +163,97 @@ pub mod bedgraph {
         }
     }
 
+    enum UnionResult {
+        New(BedGraphLine),
+        Old,
+        Done,
+    }
+
+    fn union(readers: Vec<BedGraphIterator>) {
+        use self::UnionResult::*;
+        //create a list of expected results, set them all to "Old"
+        let mut lines: Vec<UnionResult> = Vec::with_capacity(readers.length());
+        for _ in 0..readers.len() {
+            lines.push(UnionResult::Old)
+        }
+        let mut all_done = false;
+        while !all_done {
+            //assume that we are done processing
+            all_done = true;
+
+            //iterate through and retrieve new lines as necessary
+            let old_line_iter = lines.iter();
+            let read_iter = readers.iter();
+            for (index, (old_line, reader)) in old_line_iter.zip(read_iter).enumerate() {
+                match old_line {
+                    //if we have a new line, we are not done
+                    New(_) => all_done = false,
+                    //if we have an old line, get a new line
+                    Old => {
+                        match reader.next() {
+                            None => lines[index] = Done, 
+                            Some(line) => {
+                                lines[index] = New(line);
+                                all_done = false;
+                            } 
+                        }
+                    }
+                }
+            }
+            //get the minimum start and minimum stop of each line
+            let mut m_start: Option<chrom_geo::ChromPos> = readers.iter()
+                                                                  .filter_map(
+                                                                      |r| if let New(line) = r {
+                                                                          Some(line.start_pos());
+                                                                      } else {
+                                                                          None
+                                                                      }
+                                                                  )
+                                                                  .min().unwrap();
+            let mut m_stop: Option<chrom_geo::ChromPos> = readers.iter()
+                                                                  .filter_map(
+                                                                      |r| if let New(line) = r {
+                                                                          Some(line.stop_pos());
+                                                                      } else {
+                                                                          None
+                                                                      }
+                                                                  )
+                                                                  .min().unwrap();
+            //https://www.reddit.com/r/rust/comments/6q4uqc/help_whats_the_best_way_to_join_an_iterator_of/
+            let data = lines.iter()
+                                .map(|x| {
+                                    match x {
+                                        (Old, Done) => "0",
+                                        New(line) => {
+                                            let ref pos = line.coords;
+                                            //replace this with a specific call
+                                            if (pos.start <= min_stop)
+                                                & (pos.chrom == min_stop.chrom) {
+                                                //reference to the line's data
+                                            } else {
+                                                "0"
+                                            }
+                                        }
+                                    }
+                                })
+                                .collect::<Vec<&str>>()
+                                .join("\t");
+            //TODO: refactor this format line
+            println!("{}\t{}\t{}\t{}", min_start.0, min_start.1, min_stop.1, data);
+            lines = lines.iter_mut()
+                        .map(|x| {
+                            match x {
+                                Done => Done,
+                                Old => Old,
+                                //TODO: check / truncate the line here
+                                New(line) => New(line),
+                            }
+                        })
+                        .collect()
+        }
+
+    }
+
     #[cfg(test)]
     mod test_bedgraph {
         use super::*;
@@ -183,7 +274,7 @@ pub mod bedgraph {
                 panic!(format!("Last line is None: {:?}", line));
             }
         }
-
+        
         #[test]
         fn line_count() {
             //create a bedgraph iterator for a test file with 9 lines
