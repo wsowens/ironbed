@@ -2,96 +2,32 @@ use std::fmt;
 use std::fs::File;
 use std::io::{BufRead, BufReader};
 
+extern crate mergebg;
+use mergebg::bedgraph::BedGraphIterator;
+
+
 fn main() {
     let args: Vec<String> = std::env::args().collect();
+    /*
     match BedGraphUnion::new(&args[1..]) {
         Err(msg) => eprintln!("{}", msg),
-        Ok(bg_union) => {
-            union(bg_union);
+        Ok(bg_union) => 
+            let count = bedgraph.count();
         }
     }
+    */
     //union(bgs);
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct ChromPos {
-    chrom: String,
-    start: u32,
-    stop: u32,
-}
-
-impl fmt::Display for ChromPos {
-    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "{}\t{}\t{}", self.chrom, self.start, self.stop)
-    }
-}
-
-#[derive(Debug, PartialEq, Eq)]
-struct BedGraphLine {
-    coords: ChromPos,
-    data: Option<String>,
-}
-
-impl BedGraphLine {
-    fn new(input_str: &str) -> Result<BedGraphLine, String> {
-        //TODO: avoid iterating over the entire line by using enumerate
-        let cols: Vec<&str> = input_str.split_whitespace().collect();
-        if cols.len() < 3 {
-            Err(format!("Invalid number of columns [{}] in line:\n{}", cols.len(), input_str))
-        } else {
-            //use lifetimes to make this work, instead of copying the string
-            let chrom = cols[0].to_string();
-            let start: u32 = cols[1].parse().unwrap();
-            let stop:  u32 = cols[2].parse().unwrap();
-            if cols.len() > 3 {
-                Ok( BedGraphLine{coords: ChromPos{chrom, start, stop}, data: Some(cols[3..].join("\t")) } )
-            } else {
-                Ok( BedGraphLine{coords: ChromPos{chrom, start, stop}, data: None} )
-            }
-        }
-    }
-
-    fn truncate(&mut self, start: u32) {
-        self.coords.start = start;
-    }
-}
-
-struct BedGraphIterator {
-    reader: BufReader<File>,
-    lineno: u32
-}
-
-impl BedGraphIterator {
-    fn new(fname: &str) -> Result<BedGraphIterator, String> {
-        //consider removing... this information is in the reader
-        match File::open(fname) {
-            Err(x) => Err(x.to_string()),
-            Ok(handle) =>
-                 Ok( BedGraphIterator{ reader: BufReader::new(handle), lineno: 0 }   )
-          }
-    }
-}
-
-impl Iterator for BedGraphIterator {
-    type Item = BedGraphLine;
-
-    fn next(&mut self) -> Option<Self::Item> {
-        //TODO: allocate to be the size of the previous line?
-        let mut temp = String::new();
-        match self.reader.read_line(&mut temp) {
-            Err(err) => {eprintln!("{}", err.to_string()); None},
-            Ok(bytes) => {
-                match bytes {
-                    0 => None,
-                    _ => {
-                        self.lineno += 1;
-                        Some(BedGraphLine::new(&temp).unwrap())
-                    }
-                }
-            }
+    match BedGraphIterator::new(&args[1]) {
+        Err(msg) => eprintln!("{}", msg),
+        Ok(bgi) => {
+            let count = bgi.count();
+            println!("{}", count);
         }
     }
 }
+
+/*
+
 
 #[derive(Debug)]
 struct BedGraphReader {
@@ -145,7 +81,7 @@ impl BedGraphReader {
 /*TODO: create a separate iterator that returns references */
 
 struct BedGraphUnion {
-    members: Vec<BedGraphReader>,
+    members: Vec<BedGraphIterator>,
     //the position of the last truncation
     last_stop: Option<(String, u32)>,
 }
@@ -185,6 +121,11 @@ impl Iterator for BedGraphUnion {
     }
 }
 
+enum UnionResult {
+    
+    None,
+}
+
 fn total_lines(bg: &mut BedGraphReader) -> u32 {
     bg.read_line();
     while let Some(_) = bg.last_line {
@@ -204,13 +145,7 @@ fn union(bedgraphs: BedGraphUnion) {
 mod tests {
     use super::*;
 
-    #[test]
-    fn line_count() {
-        //create a bedgraph reader for a test file with 9 lines
-        let mut bedgraph = BedGraphReader::new("test/unionbedg/1+2+3.bg").unwrap();
-        //check the number of lines
-        assert_eq!(total_lines(&mut bedgraph), 9);
-    }
+
 
     #[test]
     fn chrom_pos() {
@@ -328,3 +263,4 @@ mod tests {
         assert_eq!(bgs[2].last_line, None);
     } */
 }
+*/
