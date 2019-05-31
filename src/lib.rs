@@ -110,6 +110,21 @@ pub mod bedgraph {
         }
     }
 
+    /*
+    truncate line at split_pt, if possible
+    the split_pt is at the end or after the line, return "None"
+    the split_pt is before the end of line, split and take the latter portion
+    */
+    fn truncate_after(line: BedGraphLine, split_pt: chrom_geo::ChromPos) -> Option<BedGraphLine> {
+        let coords = &line.coords;
+        if coords.stop_pos() > split_pt  {
+            Some(chrom_geo::ChromSeg{
+                BedGraphLine
+            })
+        }
+        None
+    }
+
     #[derive(Debug)]
     pub struct BedGraphIterator {
         reader: BufReader<File>,
@@ -216,35 +231,37 @@ pub mod bedgraph {
             
             //https://www.reddit.com/r/rust/comments/6q4uqc/help_whats_the_best_way_to_join_an_iterator_of/
             let data = lines.iter()
-                                .map(|x| {
-                                    match x {
-                                        New(line) => {
-                                            if line.starts_before(&min_stop) {
-                                                //reference to the line's data
-                                                match line.data {
-                                                    Some(ref value) => value,
-                                                    None => filler_str,
-                                                }
-                                            } else {
-                                                filler_str
+                            .map(|x| {
+                                match x {
+                                    New(line) => {
+                                        if line.starts_before(&min_stop) {
+                                            //reference to the line's data
+                                            match line.data {
+                                                Some(ref value) => value,
+                                                None => filler_str,
                                             }
-                                        },
-                                        _ => filler_str
-                                    }
-                                })
-                                .collect::<Vec<&str>>()
-                                .join("\t");
+                                        } else {
+                                            filler_str
+                                        }
+                                    },
+                                    _ => filler_str
+                                }
+                            })
+                            .collect::<Vec<&str>>()
+                            .join("\t");
             //TODO: refactor this format line
             println!("{}\t{}\t{}\t{}", min_start.chrom, min_start.index, min_stop.index, data);
             lines = lines.into_iter()
-                         .map(|x| {
-                             match x {
-                                 Done => Done,
-                                 Old => Old,
-                                 New(_) => x
-                             }
-                         })
-                         .collect();
+                          .map(|x| {
+                              match x {
+                                  Done => Done,
+                                  Old => Old,
+                                  New(line) => {
+
+                                  }
+                              }
+                          })
+                          .collect();
         }
 
     }
