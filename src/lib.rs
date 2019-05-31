@@ -154,7 +154,7 @@ pub mod bedgraph {
         Done,
     }
 
-    pub fn union(mut readers: Vec<BedGraphIterator>) {
+    pub fn union(mut readers: Vec<BedGraphIterator>, filler_str: &str) {
         use self::UnionResult::*;
         
         //create a list of expected results, set them all to "Old"
@@ -223,13 +223,13 @@ pub mod bedgraph {
                                                 //reference to the line's data
                                                 match line.data {
                                                     Some(ref value) => value,
-                                                    None => "0",
+                                                    None => filler_str,
                                                 }
                                             } else {
-                                                "0"
+                                                filler_str
                                             }
                                         },
-                                        _ => "0"
+                                        _ => filler_str
                                     }
                                 })
                                 .collect::<Vec<&str>>()
@@ -241,8 +241,7 @@ pub mod bedgraph {
                              match x {
                                  Done => Done,
                                  Old => Old,
-                                 //TODO: check / truncate the line here
-                                 New(line) => New(line),
+                                 New(_) => x
                              }
                          })
                          .collect();
@@ -306,10 +305,6 @@ pub mod bedgraph {
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
         }
 
-        #[test]
-        fn max_iterators() {
-
-        }
         /*
         #[test]
         fn test_truncate() {
