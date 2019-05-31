@@ -4,8 +4,8 @@ mod chrom_geo {
     //this will have to all be manually implemented
     //when we have a "new_chrom" flag
     #[derive(Debug, Ord, Eq, PartialEq, PartialOrd)]
-    pub struct ChromPos<'a> {
-        pub chrom: &'a str,
+    pub struct ChromPos {
+        pub chrom: String,
         pub index: u32
     }
 
@@ -19,11 +19,11 @@ mod chrom_geo {
 
     impl ChromSeg {
         pub fn start_pos(&self) -> ChromPos {
-            ChromPos{chrom: &self.chrom, index: self.start}
+            ChromPos{chrom: self.chrom.clone(), index: self.start}
         }
         
         pub fn stop_pos(&self) -> ChromPos {
-            ChromPos{chrom: &self.chrom, index: self.stop}
+            ChromPos{chrom: self.chrom.clone(), index: self.stop}
         }
     }
     
@@ -40,34 +40,34 @@ mod chrom_geo {
         #[test]
         fn start_stop() {
             let seg = ChromSeg{chrom: "chr3".to_string(), start: 100, stop: 250};
-            assert_eq!(seg.start_pos(), ChromPos{chrom: "chr3", index: 100});
-            assert_eq!(seg.stop_pos(), ChromPos{chrom: "chr3", index: 250});
+            assert_eq!(seg.start_pos(), ChromPos{chrom: "chr3".to_string(), index: 100});
+            assert_eq!(seg.stop_pos(), ChromPos{chrom: "chr3".to_string(), index: 250});
         }
 
         #[test]
         fn sort() {
-            let mut chrom_vec = vec![ChromPos{chrom: "chr4", index: 1000},
-                                 ChromPos{chrom: "chr1", index: 5000},
-                                 ChromPos{chrom: "chr15", index: 100},
-                                 ChromPos{chrom: "chr1", index: 3000}];
-            let sorted = vec![ChromPos{chrom: "chr1", index: 3000},
-                              ChromPos{chrom: "chr1", index: 5000},
-                              ChromPos{chrom: "chr15", index: 100},
-                              ChromPos{chrom: "chr4", index: 1000}];
+            let mut chrom_vec = vec![ChromPos{chrom: "chr4".to_string(), index: 1000},
+                                 ChromPos{chrom: "chr1".to_string(), index: 5000},
+                                 ChromPos{chrom: "chr15".to_string(), index: 100},
+                                 ChromPos{chrom: "chr1".to_string(), index: 3000}];
+            let sorted = vec![ChromPos{chrom: "chr1".to_string(), index: 3000},
+                              ChromPos{chrom: "chr1".to_string(), index: 5000},
+                              ChromPos{chrom: "chr15".to_string(), index: 100},
+                              ChromPos{chrom: "chr4".to_string(), index: 1000}];
             chrom_vec.sort_unstable();
             assert_eq!(chrom_vec, sorted);
         }
 
         #[test]
         fn min_max() {
-            let chrom_vec = vec![ChromPos{chrom: "chr4", index: 1000},
-                                 ChromPos{chrom: "chr1", index: 5000},
-                                 ChromPos{chrom: "chr15", index: 100},
-                                 ChromPos{chrom: "chr1", index: 3000}];
+            let chrom_vec = vec![ChromPos{chrom: "chr4".to_string(), index: 1000},
+                                 ChromPos{chrom: "chr1".to_string(), index: 5000},
+                                 ChromPos{chrom: "chr15".to_string(), index: 100},
+                                 ChromPos{chrom: "chr1".to_string(), index: 3000}];
             let min = chrom_vec.iter().min().unwrap();
             let max = chrom_vec.iter().max().unwrap();
-            assert_eq!(*min, ChromPos{chrom: "chr1", index: 3000});
-            assert_eq!(*max, ChromPos{chrom: "chr4", index: 1000});
+            assert_eq!(*min, ChromPos{chrom: "chr1".to_string(), index: 3000});
+            assert_eq!(*max, ChromPos{chrom: "chr4".to_string(), index: 1000});
         }
     }
 }
@@ -154,7 +154,7 @@ pub mod bedgraph {
         Done,
     }
 
-    fn union(mut readers: Vec<BedGraphIterator>) {
+    pub fn union(mut readers: Vec<BedGraphIterator>) {
         use self::UnionResult::*;
         
         //create a list of expected results, set them all to "Old"
@@ -193,8 +193,7 @@ pub mod bedgraph {
                              ).collect();
             
             //get the minimum start and minimum stop of each line
-            //let min_start = chrom_geo::ChromPos{chrom: "chr1", index: 1000};
-            
+            //find some way of cloning this
             let min_start: chrom_geo::ChromPos = lines.iter()
                                                      .filter_map(
                                                          |r| if let New(line) = r {
@@ -204,8 +203,6 @@ pub mod bedgraph {
                                                          }
                                                      )
                                                      .min().unwrap();
-            
-            //let min_stop = chrom_geo::ChromPos{chrom: "chr1", index: 1000};
             
             let min_stop: chrom_geo::ChromPos = lines.iter()
                                                      .filter_map(
@@ -222,7 +219,6 @@ pub mod bedgraph {
                                 .map(|x| {
                                     match x {
                                         New(line) => {
-                                            //replace this with a specific call
                                             if line.starts_before(&min_stop) {
                                                 //reference to the line's data
                                                 match line.data {
@@ -241,15 +237,15 @@ pub mod bedgraph {
             //TODO: refactor this format line
             println!("{}\t{}\t{}\t{}", min_start.chrom, min_start.index, min_stop.index, data);
             lines = lines.into_iter()
-                        .map(|x| {
-                            match x {
-                                Done => Done,
-                                Old => Old,
-                                //TODO: check / truncate the line here
-                                New(line) => New(line),
-                            }
-                        })
-                        .collect();
+                         .map(|x| {
+                             match x {
+                                 Done => Done,
+                                 Old => Old,
+                                 //TODO: check / truncate the line here
+                                 New(line) => New(line),
+                             }
+                         })
+                         .collect();
         }
 
     }
@@ -278,7 +274,7 @@ pub mod bedgraph {
         #[test]
         fn line_count() {
             //create a bedgraph iterator for a test file with 9 lines
-            let mut bedgraph = BedGraphIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let bedgraph = BedGraphIterator::new("test/unionbedg/1+2+3.bg").unwrap();
             //check the number of lines
             let count = bedgraph.count();
             assert_eq!(count, 9);
@@ -297,6 +293,23 @@ pub mod bedgraph {
             assert_eq!(last_line, None);
         }
         
+        #[test]
+        fn min_iterators() {
+            let bedgraph1 = BedGraphIterator::new("test/unionbedg/1.bg").unwrap();
+            let bedgraph2 = BedGraphIterator::new("test/unionbedg/2.bg").unwrap();
+            let bedgraph3 = BedGraphIterator::new("test/unionbedg/3.bg").unwrap();
+            let mut readers: Vec<BedGraphIterator> = vec![bedgraph1, bedgraph2, bedgraph3];
+            let lines: Vec<BedGraphLine> = readers.iter_mut().map(|x| x.next().unwrap()).collect();
+            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.start_pos()).min().unwrap();
+            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 900});
+            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
+            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
+        }
+
+        #[test]
+        fn max_iterators() {
+
+        }
         /*
         #[test]
         fn test_truncate() {
