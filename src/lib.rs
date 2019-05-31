@@ -18,11 +18,11 @@ mod chrom_geo {
     }
 
     impl ChromSeg {
-        fn start_pos(&self) -> ChromPos {
+        pub fn start_pos(&self) -> ChromPos {
             ChromPos{chrom: &self.chrom, index: self.start}
         }
         
-        fn stop_pos(&self) -> ChromPos {
+        pub fn stop_pos(&self) -> ChromPos {
             ChromPos{chrom: &self.chrom, index: self.stop}
         }
     }
@@ -104,24 +104,9 @@ pub mod bedgraph {
             }
         }
 
-        //TODO: implement this
+        //TODO: implement this with the new_chrom to minimize string comparison?
         fn starts_before(&self, pos: &chrom_geo::ChromPos) -> bool {
-            return 
-        }
-    
-        //TODO: implement this
-        fn ends_after(&self, pos: &chrom_geo::ChromPos) -> bool {
-            false
-        }
-
-        //TODO: implement this
-        fn truncate_before(&mut self, pos: &chrom_geo::ChromPos) -> bool {
-            false
-        }
-        
-        //TODO: implement this
-        fn truncate_after(&mut self, pos: &chrom_geo::ChromPos) -> bool {
-            false
+            self.coords.start_pos() <= *pos 
         }
     }
 
@@ -169,10 +154,11 @@ pub mod bedgraph {
         Done,
     }
 
-    fn union(readers: Vec<BedGraphIterator>) {
+    fn union(mut readers: Vec<BedGraphIterator>) {
         use self::UnionResult::*;
+        
         //create a list of expected results, set them all to "Old"
-        let mut lines: Vec<UnionResult> = Vec::with_capacity(readers.length());
+        let mut lines: Vec<UnionResult> = Vec::with_capacity(readers.len());
         for _ in 0..readers.len() {
             lines.push(UnionResult::Old)
         }
@@ -182,65 +168,79 @@ pub mod bedgraph {
             all_done = true;
 
             //iterate through and retrieve new lines as necessary
-            let old_line_iter = lines.iter();
-            let read_iter = readers.iter();
-            for (index, (old_line, reader)) in old_line_iter.zip(read_iter).enumerate() {
-                match old_line {
-                    //if we have a new line, we are not done
-                    New(_) => all_done = false,
-                    //if we have an old line, get a new line
-                    Old => {
-                        match reader.next() {
-                            None => lines[index] = Done, 
-                            Some(line) => {
-                                lines[index] = New(line);
-                                all_done = false;
-                            } 
-                        }
-                    }
-                }
-            }
+            let read_iter = readers.iter_mut();
+            lines = lines.into_iter()
+                             .zip(read_iter)
+                             .map(
+                                 | (l, r) | {
+                                     match l {
+                                         New(line) => {
+                                             all_done = false;
+                                             New(line)
+                                         },
+                                         Old => {
+                                             match r.next() {
+                                                 None => Done,
+                                                 Some(line) => {
+                                                     all_done = false;
+                                                     New(line)
+                                                 }
+                                             }
+                                         }
+                                         Done => Done,
+                                     }
+                                 }
+                             ).collect();
+            
             //get the minimum start and minimum stop of each line
-            let mut m_start: Option<chrom_geo::ChromPos> = readers.iter()
-                                                                  .filter_map(
-                                                                      |r| if let New(line) = r {
-                                                                          Some(line.start_pos());
-                                                                      } else {
-                                                                          None
-                                                                      }
-                                                                  )
-                                                                  .min().unwrap();
-            let mut m_stop: Option<chrom_geo::ChromPos> = readers.iter()
-                                                                  .filter_map(
-                                                                      |r| if let New(line) = r {
-                                                                          Some(line.stop_pos());
-                                                                      } else {
-                                                                          None
-                                                                      }
-                                                                  )
-                                                                  .min().unwrap();
+            //let min_start = chrom_geo::ChromPos{chrom: "chr1", index: 1000};
+            
+            let min_start: chrom_geo::ChromPos = lines.iter()
+                                                     .filter_map(
+                                                         |r| if let New(line) = r {
+                                                             Some(line.coords.start_pos())
+                                                         } else {
+                                                             None
+                                                         }
+                                                     )
+                                                     .min().unwrap();
+            
+            //let min_stop = chrom_geo::ChromPos{chrom: "chr1", index: 1000};
+            
+            let min_stop: chrom_geo::ChromPos = lines.iter()
+                                                     .filter_map(
+                                                         |r| if let New(line) = r {
+                                                             Some(line.coords.stop_pos())
+                                                         } else {
+                                                             None
+                                                         }
+                                                     )
+                                                     .min().unwrap();
+            
             //https://www.reddit.com/r/rust/comments/6q4uqc/help_whats_the_best_way_to_join_an_iterator_of/
             let data = lines.iter()
                                 .map(|x| {
                                     match x {
-                                        (Old, Done) => "0",
                                         New(line) => {
-                                            let ref pos = line.coords;
                                             //replace this with a specific call
-                                            if (pos.start <= min_stop)
-                                                & (pos.chrom == min_stop.chrom) {
+                                            if line.starts_before(&min_stop) {
                                                 //reference to the line's data
+                                                match line.data {
+                                                    Some(ref value) => value,
+                                                    None => "0",
+                                                }
                                             } else {
                                                 "0"
                                             }
-                                        }
+                                        },
+                                        _ => "0"
                                     }
                                 })
                                 .collect::<Vec<&str>>()
                                 .join("\t");
             //TODO: refactor this format line
-            println!("{}\t{}\t{}\t{}", min_start.0, min_start.1, min_stop.1, data);
-            lines = lines.iter_mut()
+            println!("{}\t{}\t{}\t{}", min_start.chrom, min_start.index, min_stop.index, data);
+            lines = lines.into_iter()
                         .map(|x| {
                             match x {
                                 Done => Done,
@@ -249,7 +249,7 @@ pub mod bedgraph {
                                 New(line) => New(line),
                             }
                         })
-                        .collect()
+                        .collect();
         }
 
     }
