@@ -1,29 +1,12 @@
-use std::fmt;
-use std::fs::File;
-use std::io::{BufRead, BufReader};
-
 extern crate mergebg;
 use mergebg::bedgraph::BedGraphIterator;
 
 
 fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    /*
-    match BedGraphUnion::new(&args[1..]) {
-        Err(msg) => eprintln!("{}", msg),
-        Ok(bg_union) => 
-            let count = bedgraph.count();
-        }
-    }
-    */
-    //union(bgs);
-    match BedGraphIterator::new(&args[1]) {
-        Err(msg) => eprintln!("{}", msg),
-        Ok(bgi) => {
-            let count = bgi.count();
-            println!("{}", count);
-        }
-    }
+    let readers: Vec<BedGraphIterator> = std::env::args().skip(1).map(
+        | x | BedGraphIterator::new(&x).unwrap()
+    ).collect();
+    mergebg::bedgraph::union(readers);
 }
 
 /*
