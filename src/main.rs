@@ -6,7 +6,7 @@ fn main() {
     let readers: Vec<BedGraphIterator> = std::env::args().skip(1).map(
         | x | BedGraphIterator::new(&x).unwrap()
     ).collect();
-    mergebg::bedgraph::union(readers, "null");
+    mergebg::bedgraph::union(readers, "0");
 }
 
 /*

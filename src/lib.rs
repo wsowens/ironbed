@@ -115,14 +115,16 @@ pub mod bedgraph {
     the split_pt is at the end or after the line, return "None"
     the split_pt is before the end of line, split and take the latter portion
     */
-    fn truncate_after(line: BedGraphLine, split_pt: chrom_geo::ChromPos) -> Option<BedGraphLine> {
-        let coords = &line.coords;
-        if coords.stop_pos() > split_pt  {
-            Some(chrom_geo::ChromSeg{
-                BedGraphLine
-            })
+    fn truncate_after(line: BedGraphLine, split_pt: &chrom_geo::ChromPos) -> Option<BedGraphLine> {
+        let coords = line.coords;
+        if &coords.stop_pos() > split_pt  {
+            Some(BedGraphLine{
+                    coords: chrom_geo::ChromSeg{chrom: coords.chrom, start: split_pt.index, stop: coords.stop}, 
+                    ..line
+                })
+        } else {
+            None
         }
-        None
     }
 
     #[derive(Debug)]
@@ -257,7 +259,10 @@ pub mod bedgraph {
                                   Done => Done,
                                   Old => Old,
                                   New(line) => {
-
+                                      match truncate_after(line, &min_stop) {
+                                          Some(line) => New(line),
+                                          None => Old
+                                      }
                                   }
                               }
                           })
