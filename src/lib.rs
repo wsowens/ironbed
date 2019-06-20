@@ -105,8 +105,12 @@ pub mod bedgraph {
         }
 
         //TODO: implement this with the new_chrom to minimize string comparison?
-        fn starts_before(&self, pos: &chrom_geo::ChromPos) -> bool {
-            self.coords.start_pos() <= *pos 
+        fn starts_after(&self, pos: &chrom_geo::ChromPos) -> bool {
+            self.coords.start_pos() > *pos 
+        }
+
+        fn ends_before(&self, pos: &chrom_geo::ChromPos) -> bool {
+            self.coords.stop_pos() <= *pos 
         }
     }
 
@@ -165,6 +169,10 @@ pub mod bedgraph {
         }
     }
     
+    //Each reader can have three states:
+    // In - the current position of the Union interesects with the Reader at BgLine
+    // Out - the current position of the Union does NOT intersect with the Reader at BgLine
+    // Done - the reader has nothing left
     enum UnionLine {
         In(BgLine),
         Out(BgLine),
@@ -175,11 +183,14 @@ pub mod bedgraph {
         readers: Vec<BgIterator>,
         lines: Vec<UnionLine>,
         curr: chrom_geo::ChromPos,
+        yield_empty: bool,
+        all_done: bool,
     }
 
     impl BgUnion {
         fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion, &'static str> {
             let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
+            //TODO: add logic to find the first site
             for rdr in readers.iter_mut() {
                 match rdr.next() {
                     Some(bgl) => lines.push(UnionLine::Out(bgl)),
@@ -188,7 +199,7 @@ pub mod bedgraph {
             }
             //remove this hard coding
             let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
-            Ok( BgUnion{readers, lines, curr} )
+            Ok( BgUnion{readers, lines, curr, yield_empty: false, all_done: false} )
         }
 
         fn next_transition(&self) -> chrom_geo::ChromPos {
@@ -200,30 +211,81 @@ pub mod bedgraph {
                         UnionLine::Out(ref line) => Some(line.coords.start_pos()),
             }).min().unwrap()
         }
+
+        fn advance_lines(&mut self, curr: &chrom_geo::ChromPos) {
+            self.lines = std::mem::replace(&mut self.lines, vec![]).into_iter().zip(self.readers.iter_mut()).map(| (old_line, reader) | {
+                match old_line {
+                    UnionLine::Done => UnionLine::Done,
+                    UnionLine::Out(line_data) => {
+                        // here we assume that if a line is "outside"
+                        // then we either haven't reached it yet, or have, and it is in
+                        if line_data.starts_after(curr) {
+                            UnionLine::Out(line_data)
+                        } else {
+                            // line has been reached!
+                            UnionLine::In(line_data)
+                        }
+                    },
+                    UnionLine::In(line_data) => {
+                        // here we assume that the line has been reached
+                        // thus we will either remain inside it, or move on and get a new line
+                        if line_data.ends_before(curr) {
+                            match reader.next() {
+                                Some(new_line) => {
+                                    if line_data.starts_after(curr) {
+                                        UnionLine::Out(new_line)
+                                    } else {
+                                    // line has been reached!
+                                        UnionLine::In(new_line)
+                                    }
+                                },
+                                //reader has nothing left
+                                None => UnionLine::Done,
+                            }
+                        } else {
+                            UnionLine::In(line_data)
+                        }
+                    },
+                }
+            }).collect();
+        }
     }
 
     impl Iterator for BgUnion {
-        type Item = BgLine
+        //type Item = BgLine;
+        type Item = String;
 
-        fn next(&mut self) -> Option<self::Item> {
+        fn next(&mut self) -> Option<Self::Item> {
             if self.all_done {
                 return None;
             }
             let next_trans = self.next_transition();
-            let all_out = self.lines.iter().all(| x | match x { Out(_) => true, _ => false});
+            let all_out = self.lines.iter().all(| x | match x { UnionLine::Out(_) => true, _ => false});
             //prep the data... do this in a better way if possible
-            let line = format!("")
+            let formatted_data: String = self.lines.iter().map(| x | {
+                match x { 
+                    UnionLine::In(ref line) => {
+                        match line.data {
+                            Some(ref line) => line,
+                            None => "0",
+                        }
+                    },
+                    _ => "0",
+                }}).collect::<Vec<&str>>().join("\t");
+            let line = format!("{:?}\t", next_trans);
             //advance all the readers / lines based on the next transition
-            
+            self.advance_lines(&next_trans);
+            self.curr = next_trans;
             // the region we're about to mark out must be "empty"
             if all_out {
                 if self.yield_empty {
-                    //yield the line
+                    Some(line)
                 } else {
                    self.next() 
                 }
             } else {
                 //yield the line
+                Some(line)
             }
         }
     }
@@ -250,6 +312,34 @@ pub mod bedgraph {
             }
         }
         
+        #[test]
+        fn starts_after() {
+            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
+            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();;
+            let expected_values = vec![false, false, false, false, false, true, true, true, true];
+            assert_eq!(test_values, expected_values);
+            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
+            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();
+            let expected_values = vec![false, false, false, false, true, true, true, true];
+            assert_eq!(test_values, expected_values);
+        }
+
+        #[test]
+        fn ends_before() {
+            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
+            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();;
+            let expected_values = vec![true, true, true, true, false, false, false, false, false];
+            assert_eq!(test_values, expected_values);
+            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
+            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();
+            let expected_values = vec![true, true, true, true, false, false, false, false];
+            assert_eq!(test_values, expected_values);
+        }
+
         #[test]
         fn line_count() {
             //create a bedgraph iterator for a test file with 9 lines
@@ -285,6 +375,11 @@ pub mod bedgraph {
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
         }
 
+
+        /*TODO: add test cases for
+            - start before
+            - ends affter
+        */
         /*
         #[test]
         fn test_truncate() {
