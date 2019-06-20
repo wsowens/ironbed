@@ -75,6 +75,7 @@ mod chrom_geo {
 
 pub mod bedgraph {
     use super::chrom_geo;
+    use std::fmt;
     use std::fs::File;
     use std::io::{BufRead, BufReader};
 
@@ -111,6 +112,19 @@ pub mod bedgraph {
 
         fn ends_before(&self, pos: &chrom_geo::ChromPos) -> bool {
             self.coords.stop_pos() <= *pos 
+        }
+    }
+
+    impl fmt::Display for BgLine {
+        
+        fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+            match self.data {
+                Some(ref data) =>  
+                    write!(f, "{}\t{}\t{}\t{}", self.coords.chrom, self.coords.start, self.coords.stop, data),
+                None =>
+                    write!(f, "{}\t{}\t{}", self.coords.chrom, self.coords.start, self.coords.stop)
+            }
+            
         }
     }
 
@@ -179,7 +193,7 @@ pub mod bedgraph {
         Done
     }
 
-    struct BgUnion {
+    pub struct BgUnion {
         readers: Vec<BgIterator>,
         lines: Vec<UnionLine>,
         curr: chrom_geo::ChromPos,
@@ -188,7 +202,7 @@ pub mod bedgraph {
     }
 
     impl BgUnion {
-        fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion, &'static str> {
+        pub fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion, &'static str> {
             let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
             //TODO: add logic to find the first site
             for rdr in readers.iter_mut() {
@@ -232,7 +246,7 @@ pub mod bedgraph {
                         if line_data.ends_before(curr) {
                             match reader.next() {
                                 Some(new_line) => {
-                                    if line_data.starts_after(curr) {
+                                    if new_line.starts_after(curr) {
                                         UnionLine::Out(new_line)
                                     } else {
                                     // line has been reached!
@@ -252,11 +266,11 @@ pub mod bedgraph {
     }
 
     impl Iterator for BgUnion {
-        //type Item = BgLine;
-        type Item = String;
+        type Item = BgLine;
 
         fn next(&mut self) -> Option<Self::Item> {
-            if self.all_done {
+            //make this a flag that gets updated automatically
+            if self.lines.iter().all(| x | match x { UnionLine::Done => true, _ => false}) {
                 return None;
             }
             let next_trans = self.next_transition();
@@ -272,12 +286,19 @@ pub mod bedgraph {
                     },
                     _ => "0",
                 }}).collect::<Vec<&str>>().join("\t");
-            let line = format!("{:?}\t", next_trans);
             //advance all the readers / lines based on the next transition
             self.advance_lines(&next_trans);
-            self.curr = next_trans;
-            // the region we're about to mark out must be "empty"
+            //swap "curr" with the new transition
+            //next_trans is now the 
+            let old_trans = std::mem::replace(&mut self.curr, next_trans);
+            let coords = chrom_geo::ChromSeg{
+                    chrom: old_trans.chrom,
+                    start: old_trans.index,
+                    stop: self.curr.index
+            };
+            let line = BgLine{coords, data: Some(formatted_data)};
             if all_out {
+                // the region we're about to mark out must be "empty"
                 if self.yield_empty {
                     Some(line)
                 } else {

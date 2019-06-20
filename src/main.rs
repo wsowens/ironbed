@@ -6,7 +6,10 @@ fn main() {
     let readers: Vec<BgIterator> = std::env::args().skip(1).map(
         | x | BgIterator::new(&x).unwrap()
     ).collect();
-   // mergebg::bedgraph::union(readers, "0");
+    let union = mergebg::bedgraph::BgUnion::new(readers).unwrap();
+    for line in union {
+        println!("{}", line);
+    }
 }
 
 /*
