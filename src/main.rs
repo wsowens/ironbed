@@ -1,12 +1,12 @@
 extern crate mergebg;
-use mergebg::bedgraph::BedGraphIterator;
+use mergebg::bedgraph::BgIterator;
 
 
 fn main() {
-    let readers: Vec<BedGraphIterator> = std::env::args().skip(1).map(
-        | x | BedGraphIterator::new(&x).unwrap()
+    let readers: Vec<BgIterator> = std::env::args().skip(1).map(
+        | x | BgIterator::new(&x).unwrap()
     ).collect();
-    mergebg::bedgraph::union(readers, "0");
+   // mergebg::bedgraph::union(readers, "0");
 }
 
 /*
@@ -64,7 +64,7 @@ impl BedGraphReader {
 /*TODO: create a separate iterator that returns references */
 
 struct BedGraphUnion {
-    members: Vec<BedGraphIterator>,
+    members: Vec<BgIterator>,
     //the position of the last truncation
     last_stop: Option<(String, u32)>,
 }

@@ -79,14 +79,14 @@ pub mod bedgraph {
     use std::io::{BufRead, BufReader};
 
     #[derive(Debug, PartialEq, Eq)]
-    pub struct BedGraphLine {
+    pub struct BgLine {
         coords: chrom_geo::ChromSeg,
         //TODO: turn the data into a str that references another field "raw line"
         data: Option<String>,
     }
 
-    impl BedGraphLine {
-        fn new(input_str: &str) -> Result<BedGraphLine, String> {
+    impl BgLine {
+        fn new(input_str: &str) -> Result<BgLine, String> {
             //TODO: avoid iterating over the entire line by using enumerate
             let cols: Vec<&str> = input_str.split_whitespace().collect();
             if cols.len() < 3 {
@@ -97,9 +97,9 @@ pub mod bedgraph {
                 let start: u32 = cols[1].parse().unwrap();
                 let stop:  u32 = cols[2].parse().unwrap();
                 if cols.len() > 3 {
-                    Ok( BedGraphLine{coords: chrom_geo::ChromSeg{chrom, start, stop}, data: Some(cols[3..].join("\t")) } )
+                    Ok( BgLine{coords: chrom_geo::ChromSeg{chrom, start, stop}, data: Some(cols[3..].join("\t")) } )
                 } else {
-                    Ok( BedGraphLine{coords: chrom_geo::ChromSeg{chrom, start, stop}, data: None} )
+                    Ok( BgLine{coords: chrom_geo::ChromSeg{chrom, start, stop}, data: None} )
                 }
             }
         }
@@ -115,10 +115,10 @@ pub mod bedgraph {
     the split_pt is at the end or after the line, return "None"
     the split_pt is before the end of line, split and take the latter portion
     */
-    fn truncate_after(line: BedGraphLine, split_pt: &chrom_geo::ChromPos) -> Option<BedGraphLine> {
+    fn truncate_after(line: BgLine, split_pt: &chrom_geo::ChromPos) -> Option<BgLine> {
         let coords = line.coords;
         if &coords.stop_pos() > split_pt  {
-            Some(BedGraphLine{
+            Some(BgLine{
                     coords: chrom_geo::ChromSeg{chrom: coords.chrom, start: split_pt.index, stop: coords.stop}, 
                     ..line
                 })
@@ -128,24 +128,24 @@ pub mod bedgraph {
     }
 
     #[derive(Debug)]
-    pub struct BedGraphIterator {
+    pub struct BgIterator {
         reader: BufReader<File>,
         lineno: u32
     }
 
-    impl BedGraphIterator {
-        pub fn new(fname: &str) -> Result<BedGraphIterator, String> {
+    impl BgIterator {
+        pub fn new(fname: &str) -> Result<BgIterator, String> {
             //consider removing... this information is in the reader
             match File::open(fname) {
                 Err(x) => Err(x.to_string()),
                 Ok(handle) =>
-                    Ok( BedGraphIterator{ reader: BufReader::new(handle), lineno: 0 }   )
+                    Ok( BgIterator{ reader: BufReader::new(handle), lineno: 0 }   )
             }
         }
     }
 
-    impl Iterator for BedGraphIterator {
-        type Item = BedGraphLine;
+    impl Iterator for BgIterator {
+        type Item = BgLine;
 
         fn next(&mut self) -> Option<Self::Item> {
             //TODO: allocate to be the size of the previous line?
@@ -157,126 +157,84 @@ pub mod bedgraph {
                         0 => None,
                         _ => {
                             self.lineno += 1;
-                            Some(BedGraphLine::new(&temp).unwrap())
+                            Some(BgLine::new(&temp).unwrap())
                         }
                     }
                 }
             }
         }
     }
-
-    enum UnionResult {
-        New(BedGraphLine),
-        Old,
-        Done,
+    
+    enum UnionLine {
+        In(BgLine),
+        Out(BgLine),
+        Done
     }
 
-    pub fn union(mut readers: Vec<BedGraphIterator>, filler_str: &str) {
-        use self::UnionResult::*;
-        
-        //create a list of expected results, set them all to "Old"
-        let mut lines: Vec<UnionResult> = Vec::with_capacity(readers.len());
-        for _ in 0..readers.len() {
-            lines.push(UnionResult::Old)
-        }
-        let mut all_done = false;
-        while !all_done {
-            //assume that we are done processing
-            all_done = true;
-
-            //iterate through and retrieve new lines as necessary
-            let read_iter = readers.iter_mut();
-            lines = lines.into_iter()
-                             .zip(read_iter)
-                             .map(
-                                 | (l, r) | {
-                                     match l {
-                                         New(line) => {
-                                             all_done = false;
-                                             New(line)
-                                         },
-                                         Old => {
-                                             match r.next() {
-                                                 None => Done,
-                                                 Some(line) => {
-                                                     all_done = false;
-                                                     New(line)
-                                                 }
-                                             }
-                                         }
-                                         Done => Done,
-                                     }
-                                 }
-                             ).collect();
-            
-            //get the minimum start and minimum stop of each line
-            //find some way of cloning this
-            let min_start: chrom_geo::ChromPos = lines.iter()
-                                                     .filter_map(
-                                                         |r| if let New(line) = r {
-                                                             Some(line.coords.start_pos())
-                                                         } else {
-                                                             None
-                                                         }
-                                                     )
-                                                     .min().unwrap();
-            
-            let min_stop: chrom_geo::ChromPos = lines.iter()
-                                                     .filter_map(
-                                                         |r| if let New(line) = r {
-                                                             Some(line.coords.stop_pos())
-                                                         } else {
-                                                             None
-                                                         }
-                                                     )
-                                                     .min().unwrap();
-            
-            //https://www.reddit.com/r/rust/comments/6q4uqc/help_whats_the_best_way_to_join_an_iterator_of/
-            let data = lines.iter()
-                            .map(|x| {
-                                match x {
-                                    New(line) => {
-                                        if line.starts_before(&min_stop) {
-                                            //reference to the line's data
-                                            match line.data {
-                                                Some(ref value) => value,
-                                                None => filler_str,
-                                            }
-                                        } else {
-                                            filler_str
-                                        }
-                                    },
-                                    _ => filler_str
-                                }
-                            })
-                            .collect::<Vec<&str>>()
-                            .join("\t");
-            //TODO: refactor this format line
-            println!("{}\t{}\t{}\t{}", min_start.chrom, min_start.index, min_stop.index, data);
-            lines = lines.into_iter()
-                          .map(|x| {
-                              match x {
-                                  Done => Done,
-                                  Old => Old,
-                                  New(line) => {
-                                      match truncate_after(line, &min_stop) {
-                                          Some(line) => New(line),
-                                          None => Old
-                                      }
-                                  }
-                              }
-                          })
-                          .collect();
-        }
-
+    struct BgUnion {
+        readers: Vec<BgIterator>,
+        lines: Vec<UnionLine>,
+        curr: chrom_geo::ChromPos,
     }
+
+    impl BgUnion {
+        fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion, &'static str> {
+            let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
+            for rdr in readers.iter_mut() {
+                match rdr.next() {
+                    Some(bgl) => lines.push(UnionLine::Out(bgl)),
+                    None => lines.push(UnionLine::Done),
+                }
+            }
+            //remove this hard coding
+            let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
+            Ok( BgUnion{readers, lines, curr} )
+        }
+
+        fn next_transition(&self) -> chrom_geo::ChromPos {
+            //TODO: add logic for empty spaces / provided sizes file
+            self.lines.iter().filter_map(
+                | x | match x {
+                        UnionLine::Done => None,
+                        UnionLine::In(ref line) => Some(line.coords.stop_pos()),
+                        UnionLine::Out(ref line) => Some(line.coords.start_pos()),
+            }).min().unwrap()
+        }
+    }
+
+    impl Iterator for BgUnion {
+        type Item = BgLine
+
+        fn next(&mut self) -> Option<self::Item> {
+            if self.all_done {
+                return None;
+            }
+            let next_trans = self.next_transition();
+            let all_out = self.lines.iter().all(| x | match x { Out(_) => true, _ => false});
+            //prep the data... do this in a better way if possible
+            let line = format!("")
+            //advance all the readers / lines based on the next transition
+            
+            // the region we're about to mark out must be "empty"
+            if all_out {
+                if self.yield_empty {
+                    //yield the line
+                } else {
+                   self.next() 
+                }
+            } else {
+                //yield the line
+            }
+        }
+    }
+
 
     #[cfg(test)]
     mod test_bedgraph {
         use super::*;
         
         //helper functions for checking chrom_seg and data
-        fn check_segment(line: &Option<BedGraphLine>, coords: chrom_geo::ChromSeg) {
+        fn check_segment(line: &Option<BgLine>, coords: chrom_geo::ChromSeg) {
             if let Some(line) = line {
                 assert_eq!(line.coords, coords);
             } else {
@@ -284,7 +242,7 @@ pub mod bedgraph {
             }
         }
 
-        fn check_data(line: &Option<BedGraphLine>, data: Option<String>) {
+        fn check_data(line: &Option<BgLine>, data: Option<String>) {
             if let Some(line) = line {
                 assert_eq!(line.data, data);
             } else {
@@ -295,7 +253,7 @@ pub mod bedgraph {
         #[test]
         fn line_count() {
             //create a bedgraph iterator for a test file with 9 lines
-            let bedgraph = BedGraphIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let bedgraph = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
             //check the number of lines
             let count = bedgraph.count();
             assert_eq!(count, 9);
@@ -303,7 +261,7 @@ pub mod bedgraph {
 
         #[test]
         fn iterator_next() {
-            let mut bedgraph = BedGraphIterator::new("test/unionbedg/1.bg").unwrap();
+            let mut bedgraph = BgIterator::new("test/unionbedg/1.bg").unwrap();
             let last_line = bedgraph.next();
             check_segment(&last_line, chrom_geo::ChromSeg{chrom: "chr1".to_string(), start: 1000, stop: 1500 } );
             check_data(&last_line, Some("10".to_string()));;
@@ -316,11 +274,11 @@ pub mod bedgraph {
         
         #[test]
         fn min_iterators() {
-            let bedgraph1 = BedGraphIterator::new("test/unionbedg/1.bg").unwrap();
-            let bedgraph2 = BedGraphIterator::new("test/unionbedg/2.bg").unwrap();
-            let bedgraph3 = BedGraphIterator::new("test/unionbedg/3.bg").unwrap();
-            let mut readers: Vec<BedGraphIterator> = vec![bedgraph1, bedgraph2, bedgraph3];
-            let lines: Vec<BedGraphLine> = readers.iter_mut().map(|x| x.next().unwrap()).collect();
+            let bedgraph1 = BgIterator::new("test/unionbedg/1.bg").unwrap();
+            let bedgraph2 = BgIterator::new("test/unionbedg/2.bg").unwrap();
+            let bedgraph3 = BgIterator::new("test/unionbedg/3.bg").unwrap();
+            let mut readers: Vec<BgIterator> = vec![bedgraph1, bedgraph2, bedgraph3];
+            let lines: Vec<BgLine> = readers.iter_mut().map(|x| x.next().unwrap()).collect();
             let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.start_pos()).min().unwrap();
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 900});
             let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
@@ -330,9 +288,9 @@ pub mod bedgraph {
         /*
         #[test]
         fn test_truncate() {
-            let mut line = BedGraphLine::new("chr1 900 1600 37").unwrap();
+            let mut line = BgLine::new("chr1 900 1600 37").unwrap();
             line.truncate(950);
-            assert_eq!(line, BedGraphLine::new("chr1 950 1600 37").unwrap());
+            assert_eq!(line, BgLine::new("chr1 950 1600 37").unwrap());
         }
         */
     }
