@@ -274,7 +274,7 @@ pub mod bedgraph {
                 return None;
             }
             let next_trans = self.next_transition();
-            let all_out = self.lines.iter().all(| x | match x { UnionLine::Out(_) => true, _ => false});
+            let has_in = self.lines.iter().any(| x | match x { UnionLine::In(_) => true, _ => false});
             //prep the data... do this in a better way if possible
             let formatted_data: String = self.lines.iter().map(| x | {
                 match x { 
@@ -297,16 +297,19 @@ pub mod bedgraph {
                     stop: self.curr.index
             };
             let line = BgLine{coords, data: Some(formatted_data)};
-            if all_out {
-                // the region we're about to mark out must be "empty"
+            eprintln!("Is_empty: {}", has_in);
+            // check there are any bedgraph data for this region
+            if has_in {
+                //yield the line
+                Some(line)
+            } else {
+                // otherwise, check if we should yield this
+                // line or not, depending on the settings
                 if self.yield_empty {
                     Some(line)
                 } else {
                    self.next() 
                 }
-            } else {
-                //yield the line
-                Some(line)
             }
         }
     }
