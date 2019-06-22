@@ -128,23 +128,6 @@ pub mod bedgraph {
         }
     }
 
-    /*
-    truncate line at split_pt, if possible
-    the split_pt is at the end or after the line, return "None"
-    the split_pt is before the end of line, split and take the latter portion
-    */
-    fn truncate_after(line: BgLine, split_pt: &chrom_geo::ChromPos) -> Option<BgLine> {
-        let coords = line.coords;
-        if &coords.stop_pos() > split_pt  {
-            Some(BgLine{
-                    coords: chrom_geo::ChromSeg{chrom: coords.chrom, start: split_pt.index, stop: coords.stop}, 
-                    ..line
-                })
-        } else {
-            None
-        }
-    }
-
     #[derive(Debug)]
     pub struct BgIterator {
         reader: BufReader<File>,
@@ -398,19 +381,5 @@ pub mod bedgraph {
             let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
         }
-
-
-        /*TODO: add test cases for
-            - start before
-            - ends affter
-        */
-        /*
-        #[test]
-        fn test_truncate() {
-            let mut line = BgLine::new("chr1 900 1600 37").unwrap();
-            line.truncate(950);
-            assert_eq!(line, BgLine::new("chr1 950 1600 37").unwrap());
-        }
-        */
     }
 }
