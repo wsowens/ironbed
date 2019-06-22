@@ -180,8 +180,7 @@ pub mod bedgraph {
         readers: Vec<BgIterator>,
         lines: Vec<UnionLine>,
         curr: chrom_geo::ChromPos,
-        yield_empty: bool,
-        all_done: bool,
+        report_empty: bool,
     }
 
     impl BgUnion {
@@ -196,7 +195,7 @@ pub mod bedgraph {
             }
             //remove this hard coding
             let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
-            Ok( BgUnion{readers, lines, curr, yield_empty: false, all_done: false} )
+            Ok( BgUnion{readers, lines, curr, report_empty: false} )
         }
 
         fn next_transition(&self) -> chrom_geo::ChromPos {
@@ -288,7 +287,7 @@ pub mod bedgraph {
             } else {
                 // otherwise, check if we should yield this
                 // line or not, depending on the settings
-                if self.yield_empty {
+                if self.report_empty {
                     Some(line)
                 } else {
                    self.next() 
@@ -380,6 +379,35 @@ pub mod bedgraph {
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 900});
             let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
             assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
+        }
+
+        #[test]
+        fn union_defaults() {
+            //gather the correct inputs into a union
+            let inputs: Vec<BgIterator> = vec!["test/unionbedg/1.bg", 
+                                               "test/unionbedg/2.bg",
+                                                "test/unionbedg/3.bg"].iter()
+                                                                      .map(|name| BgIterator::new(name).unwrap())
+                                                                      .collect();
+            let union = BgUnion::new(inputs).unwrap();
+            let expected_iterator = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            for (actual, expected) in union.zip(expected_iterator) {
+                assert_eq!(actual, expected);
+            }
+        }
+        
+        #[test]
+        fn union_defaults2() {
+            //gather the correct inputs into a union
+            let inputs: Vec<BgIterator> = vec!["test/unionbedg/empty-1.bg",
+                                               "test/unionbedg/empty-2.bg"].iter()
+                                                            .map(|name| BgIterator::new(name).unwrap())
+                                                            .collect();
+            let union = BgUnion::new(inputs).unwrap();
+            let expected_iterator = BgIterator::new("test/unionbedg/empty-1+2.bg").unwrap();
+            for (actual, expected) in union.zip(expected_iterator) {
+                assert_eq!(actual, expected);
+            }
         }
     }
 }
