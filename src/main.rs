@@ -1,10 +1,10 @@
-extern crate mergebg;
+extern crate ironbed;
 #[macro_use]
 extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 
-use mergebg::bedgraph::BgIterator;
+use ironbed::bedgraph::BgIterator;
 
 
 fn main() {
