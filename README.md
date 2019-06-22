@@ -1,9 +1,17 @@
-# MergeBG
-A simple command line tool for merging bedgraph files.
+# ironbed
+An implementation of [bedtools](https://github.com/arq5x/bedtools2/) in Rust.
 
-## References
-Heavily based on this tutorial:
-(https://doc.rust-lang.org/book/ch12-00-an-io-project.html)
+This is project is a work in progress.
 
 ## Getting Started
-files should be sorted with `sort -k1,1 -k2,2n`
+To compile this project, simply use `cargo build --release`.
+The binary will be located here in `target/release/ironbed`.
+
+## Project Goals
+- implement all major tools in the bedtools package
+- keep code well-documented and readable
+- make performance improvements where possible
+- publish on crates.io
+
+## License
+This project is licensed under the Apache License v2. Refer to [LICENSE](./LICENSE) for details. 
