@@ -176,11 +176,16 @@ pub mod bedgraph {
         Done
     }
 
+    pub struct UnionConfig {
+        report_empty: bool,
+        filler: &'static str,
+    }
+
     pub struct BgUnion {
         readers: Vec<BgIterator>,
         lines: Vec<UnionLine>,
         curr: chrom_geo::ChromPos,
-        report_empty: bool,
+        config: UnionConfig
     }
 
     impl BgUnion {
@@ -195,7 +200,8 @@ pub mod bedgraph {
             }
             //remove this hard coding
             let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
-            Ok( BgUnion{readers, lines, curr, report_empty: false} )
+            let config = UnionConfig{report_empty: false, filler: "0"};
+            Ok( BgUnion{readers, lines, curr, config} )
         }
 
         fn next_transition(&self) -> chrom_geo::ChromPos {
@@ -263,10 +269,10 @@ pub mod bedgraph {
                     UnionLine::In(ref line) => {
                         match line.data {
                             Some(ref line) => line,
-                            None => "0",
+                            None => self.config.filler,
                         }
                     },
-                    _ => "0",
+                    _ => self.config.filler,
                 }}).collect::<Vec<&str>>().join("\t");
             //advance all the readers / lines based on the next transition
             self.advance_lines(&next_trans);
@@ -287,7 +293,7 @@ pub mod bedgraph {
             } else {
                 // otherwise, check if we should yield this
                 // line or not, depending on the settings
-                if self.report_empty {
+                if self.config.report_empty {
                     Some(line)
                 } else {
                    self.next() 
@@ -296,6 +302,20 @@ pub mod bedgraph {
         }
     }
 
+    fn main(filenames: Vec<&str>, config: UnionConfig) {
+        let readers: Vec<BgIterator> = filenames.iter()
+                                                .map(| fname | { 
+            BgIterator::new(fname).unwrap_or_else(| err | {
+                eprintln!("Cannot find file with name {}", fname); 
+                std::process::exit(1);
+            })
+        })
+                                                .collect();
+        let union = BgUnion::new(readers).unwrap();
+        for line in union {
+            println!("{}", line);
+        }
+    }
 
     #[cfg(test)]
     mod test_bedgraph {
