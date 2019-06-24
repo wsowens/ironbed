@@ -72,6 +72,139 @@ mod chrom_geo {
     }
 }
 
+pub mod chrom_sizes {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+    use std::collections::HashMap;
+
+    struct ChromSizes {
+        filename: String,
+        sizes: HashMap<String, u32>,
+    }
+
+    impl ChromSizes {
+        fn new(filename: &str) -> Result<ChromSizes, String> {
+            match File::open(filename) {
+                Err(msg) => Err(format!("Error with '{}': {}", filename, msg)),
+                Ok(handle) => {
+                    let mut handle = BufReader::new(handle);
+                    let mut sizes: HashMap<String, u32> = HashMap::new();
+                    let mut lineno = 0;
+                    loop {
+                        lineno += 1;
+                        let mut line = String::new();
+                        match handle.read_line(&mut line) {
+                            Err(msg) => return Err(format!("Error with '{}': {}", filename, msg)),
+                            Ok(0) => {
+                                return Ok(ChromSizes{filename: filename.to_string(), sizes});
+                            }
+                            _ => {
+                                let cols: Vec<&str> = line.split_whitespace().collect();
+                                match cols.len() {
+                                    2 => {
+                                        match cols[1].parse() {
+                                            Ok(size) => sizes.insert(cols[0].to_string(), size),
+                                            Err(_) => return Err(format!("Error in '{}', line {}: expected unsigned integer, received '{}'", filename, lineno, cols[1])),
+                                        };
+                                    },
+                                    _ => {
+                                        return Err(format!("Error in '{}', line {}: expected exactly 2 fields, received {}", filename, lineno, cols.len()))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[cfg(test)]
+    mod test_chrom_sizes {
+        use super::*;
+
+        #[test]
+        fn test_hg38_chrom_sizes() {
+            let hg38 = ChromSizes::new("test/chrom.sizes/hg38.chrom.sizes").unwrap();
+            let pairs: Vec<(&str, u32)> = vec![("chr1", 248956422),
+                                               ("chr2", 242193529),
+                                               ("chrX", 156040895),
+                                               ("chr19", 58617616),
+                                               ("chr19_GL383573v1_alt", 385657),
+                                               ("chrUn_KI270580v1", 1553),
+                                               ("chrUn_KI270394v1", 970)];
+            for (chrom, size) in pairs {
+                assert_eq!(hg38.sizes.get(chrom).unwrap(), &size);
+            }
+            
+        }
+
+        #[test]
+        fn test_tair10_chrom_sizes() {
+            let tair10 = ChromSizes::new("test/chrom.sizes/tair10.chrom.sizes").unwrap();
+            let pairs: Vec<(&str, u32)> = vec![("Chr1", 30427671),
+                                               ("Chr2", 19698289),
+                                               ("Chr3", 23459830),
+                                               ("Chr4", 18585056),
+                                               ("Chr5", 26975502),
+                                               ("ChrC", 154478),
+                                               ("ChrM", 366924),];
+            for (chrom, size) in pairs {
+                assert_eq!(tair10.sizes.get(chrom).unwrap(), &size);
+            }
+        }
+
+        #[test]
+        fn chrom_sizes_not_exist() {
+            let expect = String::from("Error with 'test/chrom.sizes/does_not_exist': No such file or directory (os error 2)");
+            if let Err(msg) = ChromSizes::new("test/chrom.sizes/does_not_exist") {
+                assert_eq!(msg, expect)
+            } else {
+                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+            }
+        }
+
+        #[test]
+        fn test_badfield1_chrom_sizes() {
+            let expect = String::from("Error in 'test/chrom.sizes/bad_field1.chrom.sizes', line 6: expected exactly 2 fields, received 1");
+            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_field1.chrom.sizes") {
+                assert_eq!(msg, expect)
+            } else {
+                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+            }
+        }
+
+        #[test]
+        fn test_badfield2_chrom_sizes() {
+            let expect = String::from("Error in 'test/chrom.sizes/bad_field2.chrom.sizes', line 3: expected exactly 2 fields, received 3");
+            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_field2.chrom.sizes") {
+                assert_eq!(msg, expect)
+            } else {
+                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+            }
+        }
+
+        #[test]
+        fn test_badsize1_chrom_sizes() {
+            let expect = String::from("Error in 'test/chrom.sizes/bad_size1.chrom.sizes', line 2: expected unsigned integer, received '-19698289'");
+            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_size1.chrom.sizes") {
+                assert_eq!(msg, expect)
+            } else {
+                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+            }
+        }
+
+        #[test]
+        fn test_badsize2_chrom_sizes() {
+            let expect = String::from("Error in 'test/chrom.sizes/bad_size2.chrom.sizes', line 4: expected unsigned integer, received 'apple'");
+            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_size2.chrom.sizes") {
+                assert_eq!(msg, expect)
+            } else {
+                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+            }
+        }
+    }
+}
 
 pub mod bedgraph {
     use super::chrom_geo;
@@ -81,9 +214,9 @@ pub mod bedgraph {
 
     #[derive(Debug, PartialEq, Eq)]
     pub struct BgLine {
-        coords: chrom_geo::ChromSeg,
+        pub coords: chrom_geo::ChromSeg,
         //TODO: turn the data into a str that references another field "raw line"
-        data: Option<String>,
+        pub data: Option<String>,
     }
 
     impl BgLine {
@@ -106,11 +239,11 @@ pub mod bedgraph {
         }
 
         //TODO: implement this with the new_chrom to minimize string comparison?
-        fn starts_after(&self, pos: &chrom_geo::ChromPos) -> bool {
+        pub fn starts_after(&self, pos: &chrom_geo::ChromPos) -> bool {
             self.coords.start_pos() > *pos 
         }
 
-        fn ends_before(&self, pos: &chrom_geo::ChromPos) -> bool {
+        pub fn ends_before(&self, pos: &chrom_geo::ChromPos) -> bool {
             self.coords.stop_pos() <= *pos 
         }
     }
@@ -165,7 +298,95 @@ pub mod bedgraph {
             }
         }
     }
-    
+    #[cfg(test)]
+    mod test_bedgraph {
+        use super::*;
+        
+        //helper functions for checking chrom_seg and data
+        fn check_segment(line: &Option<BgLine>, coords: chrom_geo::ChromSeg) {
+            if let Some(line) = line {
+                assert_eq!(line.coords, coords);
+            } else {
+                panic!(format!("Last line is None: {:?}", line));
+            }
+        }
+
+        fn check_data(line: &Option<BgLine>, data: Option<String>) {
+            if let Some(line) = line {
+                assert_eq!(line.data, data);
+            } else {
+                panic!(format!("Last line is None: {:?}", line));
+            }
+        }
+        
+        #[test]
+        fn starts_after() {
+            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
+            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();;
+            let expected_values = vec![false, false, false, false, false, true, true, true, true];
+            assert_eq!(test_values, expected_values);
+            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
+            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();
+            let expected_values = vec![false, false, false, false, true, true, true, true];
+            assert_eq!(test_values, expected_values);
+        }
+
+        #[test]
+        fn ends_before() {
+            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
+            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();;
+            let expected_values = vec![true, true, true, true, false, false, false, false, false];
+            assert_eq!(test_values, expected_values);
+            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
+            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
+            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();
+            let expected_values = vec![true, true, true, true, false, false, false, false];
+            assert_eq!(test_values, expected_values);
+        }
+
+        #[test]
+        fn line_count() {
+            //create a bedgraph iterator for a test file with 9 lines
+            let bedgraph = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
+            //check the number of lines
+            let count = bedgraph.count();
+            assert_eq!(count, 9);
+        }
+
+        #[test]
+        fn iterator_next() {
+            let mut bedgraph = BgIterator::new("test/unionbedg/1.bg").unwrap();
+            let last_line = bedgraph.next();
+            check_segment(&last_line, chrom_geo::ChromSeg{chrom: "chr1".to_string(), start: 1000, stop: 1500 } );
+            check_data(&last_line, Some("10".to_string()));;
+            let last_line = bedgraph.next();
+            check_segment(&last_line, chrom_geo::ChromSeg{chrom: "chr1".to_string(), start: 2000, stop: 2100 } );
+            check_data(&last_line, Some("20".to_string()));;
+            let last_line = bedgraph.next();
+            assert_eq!(last_line, None);
+        }
+        
+        #[test]
+        fn min_iterators() {
+            let bedgraph1 = BgIterator::new("test/unionbedg/1.bg").unwrap();
+            let bedgraph2 = BgIterator::new("test/unionbedg/2.bg").unwrap();
+            let bedgraph3 = BgIterator::new("test/unionbedg/3.bg").unwrap();
+            let mut readers: Vec<BgIterator> = vec![bedgraph1, bedgraph2, bedgraph3];
+            let lines: Vec<BgLine> = readers.iter_mut().map(|x| x.next().unwrap()).collect();
+            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.start_pos()).min().unwrap();
+            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 900});
+            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
+            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
+        }
+    }
+}
+
+pub mod union {
+    use super::chrom_geo;
+    use super::bedgraph::{BgIterator, BgLine};
     //Each reader can have three states:
     // In - the current position of the Union interesects with the Reader at BgLine
     // Out - the current position of the Union does NOT intersect with the Reader at BgLine
@@ -190,19 +411,10 @@ pub mod bedgraph {
     }
 
     impl<'a> BgUnion<'a> {
-        pub fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion<'static>, &'static str> {
-            let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
-            //TODO: add logic to find the first site
-            for rdr in readers.iter_mut() {
-                match rdr.next() {
-                    Some(bgl) => lines.push(UnionLine::Out(bgl)),
-                    None => lines.push(UnionLine::Done),
-                }
-            }
-            //remove this hard coding
-            let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
+        pub fn new(readers: Vec<BgIterator>) -> Result<BgUnion<'static>, &'static str> {
+            // simply call the "with_config" method using the default config below
             let config = UnionConfig{report_empty: false, filler: "0"};
-            Ok( BgUnion{readers, lines, curr, config} )
+            BgUnion::with_config(readers, config)
         }
         
         pub fn with_config(mut readers: Vec<BgIterator>, config: UnionConfig) -> Result<BgUnion, &'static str> {
@@ -322,7 +534,7 @@ pub mod bedgraph {
         for fname in filenames {
             match BgIterator::new(fname) {
                 Ok(bg_iter) => bg_iters.push(bg_iter),
-                Err(e) => return Err(e),
+                Err(e) => return Err(format!("{}: '{}'", e, fname)),
             }
         }
         let union = BgUnion::with_config(bg_iters, config)?;
@@ -332,89 +544,10 @@ pub mod bedgraph {
         Ok(())
     }
 
+    
     #[cfg(test)]
-    mod test_bedgraph {
+    mod test_union {
         use super::*;
-        
-        //helper functions for checking chrom_seg and data
-        fn check_segment(line: &Option<BgLine>, coords: chrom_geo::ChromSeg) {
-            if let Some(line) = line {
-                assert_eq!(line.coords, coords);
-            } else {
-                panic!(format!("Last line is None: {:?}", line));
-            }
-        }
-
-        fn check_data(line: &Option<BgLine>, data: Option<String>) {
-            if let Some(line) = line {
-                assert_eq!(line.data, data);
-            } else {
-                panic!(format!("Last line is None: {:?}", line));
-            }
-        }
-        
-        #[test]
-        fn starts_after() {
-            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
-            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
-            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();;
-            let expected_values = vec![false, false, false, false, false, true, true, true, true];
-            assert_eq!(test_values, expected_values);
-            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
-            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
-            let test_values = bg.map(|x| x.starts_after(&pos)).collect::<Vec<bool>>();
-            let expected_values = vec![false, false, false, false, true, true, true, true];
-            assert_eq!(test_values, expected_values);
-        }
-
-        #[test]
-        fn ends_before() {
-            let bg = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
-            let pos = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1980};
-            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();;
-            let expected_values = vec![true, true, true, true, false, false, false, false, false];
-            assert_eq!(test_values, expected_values);
-            let bg = BgIterator::new("test/unionbedg/long.bg").unwrap();
-            let pos = chrom_geo::ChromPos{chrom: "chr2".to_string(), index: 4000};
-            let test_values = bg.map(|x| x.ends_before(&pos)).collect::<Vec<bool>>();
-            let expected_values = vec![true, true, true, true, false, false, false, false];
-            assert_eq!(test_values, expected_values);
-        }
-
-        #[test]
-        fn line_count() {
-            //create a bedgraph iterator for a test file with 9 lines
-            let bedgraph = BgIterator::new("test/unionbedg/1+2+3.bg").unwrap();
-            //check the number of lines
-            let count = bedgraph.count();
-            assert_eq!(count, 9);
-        }
-
-        #[test]
-        fn iterator_next() {
-            let mut bedgraph = BgIterator::new("test/unionbedg/1.bg").unwrap();
-            let last_line = bedgraph.next();
-            check_segment(&last_line, chrom_geo::ChromSeg{chrom: "chr1".to_string(), start: 1000, stop: 1500 } );
-            check_data(&last_line, Some("10".to_string()));;
-            let last_line = bedgraph.next();
-            check_segment(&last_line, chrom_geo::ChromSeg{chrom: "chr1".to_string(), start: 2000, stop: 2100 } );
-            check_data(&last_line, Some("20".to_string()));;
-            let last_line = bedgraph.next();
-            assert_eq!(last_line, None);
-        }
-        
-        #[test]
-        fn min_iterators() {
-            let bedgraph1 = BgIterator::new("test/unionbedg/1.bg").unwrap();
-            let bedgraph2 = BgIterator::new("test/unionbedg/2.bg").unwrap();
-            let bedgraph3 = BgIterator::new("test/unionbedg/3.bg").unwrap();
-            let mut readers: Vec<BgIterator> = vec![bedgraph1, bedgraph2, bedgraph3];
-            let lines: Vec<BgLine> = readers.iter_mut().map(|x| x.next().unwrap()).collect();
-            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.start_pos()).min().unwrap();
-            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 900});
-            let min_start: chrom_geo::ChromPos = lines.iter().map(|x| x.coords.stop_pos()).min().unwrap();
-            assert_eq!(min_start, chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 1500});
-        }
 
         #[test]
         fn union_defaults() {

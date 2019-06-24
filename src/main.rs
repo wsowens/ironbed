@@ -4,7 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 
-use ironbed::bedgraph::{UnionConfig, union_main};
+use ironbed::union::{UnionConfig, union_main};
 
 
 fn main() {
