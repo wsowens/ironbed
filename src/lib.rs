@@ -176,20 +176,21 @@ pub mod bedgraph {
         Done
     }
 
-    pub struct UnionConfig {
-        report_empty: bool,
-        filler: &'static str,
+    #[derive(Debug)]
+    pub struct UnionConfig<'a> {
+        pub report_empty: bool,
+        pub filler: &'a str,
     }
 
-    pub struct BgUnion {
+    pub struct BgUnion<'a> {
         readers: Vec<BgIterator>,
         lines: Vec<UnionLine>,
         curr: chrom_geo::ChromPos,
-        config: UnionConfig
+        config: UnionConfig<'a>,
     }
 
-    impl BgUnion {
-        pub fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion, &'static str> {
+    impl<'a> BgUnion<'a> {
+        pub fn new(mut readers: Vec<BgIterator>) -> Result<BgUnion<'static>, &'static str> {
             let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
             //TODO: add logic to find the first site
             for rdr in readers.iter_mut() {
@@ -203,10 +204,20 @@ pub mod bedgraph {
             let config = UnionConfig{report_empty: false, filler: "0"};
             Ok( BgUnion{readers, lines, curr, config} )
         }
-        /*
-        pub fn with_config(mut readers: Vec<BgIterator>)-> Result BgUnion, &'static str> {
-
-        }*/
+        
+        pub fn with_config(mut readers: Vec<BgIterator>, config: UnionConfig) -> Result<BgUnion, &'static str> {
+            let mut lines: Vec<UnionLine> = Vec::with_capacity(readers.len());
+            for rdr in readers.iter_mut() {
+                match rdr.next() {
+                    Some(bgl) => lines.push(UnionLine::Out(bgl)),
+                    None => lines.push(UnionLine::Done),
+                }
+            }
+            //TODO: add logic to find the first site
+            //remove this hard coding
+            let curr = chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 0};
+            Ok( BgUnion{readers, lines, curr, config} )
+        }
 
         fn next_transition(&self) -> chrom_geo::ChromPos {
             //TODO: add logic for empty spaces / provided sizes file
@@ -257,7 +268,7 @@ pub mod bedgraph {
         }
     }
 
-    impl Iterator for BgUnion {
+    impl<'a> Iterator for BgUnion<'a> {
         type Item = BgLine;
 
         fn next(&mut self) -> Option<Self::Item> {
@@ -289,7 +300,6 @@ pub mod bedgraph {
                     stop: self.curr.index
             };
             let line = BgLine{coords, data: Some(formatted_data)};
-            eprintln!("Is_empty: {}", has_in);
             // check there are any bedgraph data for this region
             if has_in {
                 //yield the line
@@ -307,19 +317,19 @@ pub mod bedgraph {
     }
 
 
-    pub fn union_main(filenames: Vec<&str>, config: UnionConfig) {
-        let readers: Vec<BgIterator> = filenames.iter()
-                                                .map(| fname | { 
-            BgIterator::new(fname).unwrap_or_else(| err | {
-                eprintln!("Cannot find file with name {}", fname); 
-                std::process::exit(1);
-            })
-        })
-                                                .collect();
-        let union = BgUnion::new(readers).unwrap();
+    pub fn union_main(filenames: Vec<&str>, config: UnionConfig) -> Result<(), String> {
+        let mut bg_iters: Vec<BgIterator> = Vec::with_capacity(filenames.len());
+        for fname in filenames {
+            match BgIterator::new(fname) {
+                Ok(bg_iter) => bg_iters.push(bg_iter),
+                Err(e) => return Err(e),
+            }
+        }
+        let union = BgUnion::with_config(bg_iters, config)?;
         for line in union {
             println!("{}", line);
         }
+        Ok(())
     }
 
     #[cfg(test)]
