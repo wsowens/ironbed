@@ -203,6 +203,10 @@ pub mod bedgraph {
             let config = UnionConfig{report_empty: false, filler: "0"};
             Ok( BgUnion{readers, lines, curr, config} )
         }
+        /*
+        pub fn with_config(mut readers: Vec<BgIterator>)-> Result BgUnion, &'static str> {
+
+        }*/
 
         fn next_transition(&self) -> chrom_geo::ChromPos {
             //TODO: add logic for empty spaces / provided sizes file
@@ -302,7 +306,8 @@ pub mod bedgraph {
         }
     }
 
-    fn main(filenames: Vec<&str>, config: UnionConfig) {
+
+    pub fn union_main(filenames: Vec<&str>, config: UnionConfig) {
         let readers: Vec<BgIterator> = filenames.iter()
                                                 .map(| fname | { 
             BgIterator::new(fname).unwrap_or_else(| err | {
