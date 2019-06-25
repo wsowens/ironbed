@@ -36,6 +36,15 @@ fn main() {
                                            .takes_value(true)
                                            .value_name("FILE")
                                            .help("Use genome file <FILE> to calculate empty regions.")))
+                          .subcommand(SubCommand::with_name("random")
+                                      .version(crate_version!())
+                                      .about("Generate random BED files")
+                                      .arg(Arg::with_name("genome")
+                                           .short("g")
+                                           .long("genome")
+                                           .takes_value(true)
+                                           .required(true)
+                                           .help("Use genome file <FILE> for random values")))
                           .get_matches();
 
     match matches.subcommand() {
@@ -48,7 +57,10 @@ fn main() {
                 eprintln!("{}", err);
                 std::process::exit(1);
             });
-        }, 
+        },
+        ("random", Some(rand_matches)) => {
+
+        },
         ("", None) => eprintln!("No subcommand provided. Try 'ironbed help' for available subcommands."),
         _ => unreachable!(),
     }
