@@ -3,8 +3,7 @@ extern crate ironbed;
 extern crate clap;
 
 use clap::{Arg, App, SubCommand};
-
-use ironbed::union::{UnionConfig, union_main};
+use ironbed::union::union_main;
 
 
 fn main() {
@@ -20,6 +19,7 @@ fn main() {
                                            .multiple(true)
                                            .required(true)
                                            .takes_value(true)
+                                           .value_name("FILE")
                                            .help("Input bedGraph files. Input files cannot contain overlapping intervals and should be sorted by chrom, start. (Use the command 'sort -k1,1 -k2,2n for the correct order.')"))
                                       .arg(Arg::with_name("filler")
                                            .long("filler")
@@ -28,22 +28,23 @@ fn main() {
                                            .help("Use <TEXT> when representing intervals having no value. [Default: '0']"))
                                       .arg(Arg::with_name("empty")
                                            .long("empty")
-                                           .help("Report empty regions (i.e. start/end intervals with no values in any file). Requires '-g <FILE>' parameter.")))
+                                           .requires("genome")
+                                           .help("Report empty regions (i.e. start/end intervals with no values in any file). Requires '-g <FILE>' parameter."))
+                                      .arg(Arg::with_name("genome")
+                                           .short("g")
+                                           .long("genome")
+                                           .takes_value(true)
+                                           .value_name("FILE")
+                                           .help("Use genome file <FILE> to calculate empty regions.")))
                           .get_matches();
 
     match matches.subcommand() {
         ("unionbedg", Some(ubg_matches)) => {
             //this operation is safe because get_matches() will halt execution if '-i' is not provided
             let filenames: Vec<&str> = ubg_matches.values_of("input").unwrap().collect();
-            let filler = match ubg_matches.value_of("filler") {
-                Some(fill_value) => fill_value,
-                None => "0",
-            };
-            let config = UnionConfig{report_empty: ubg_matches.is_present("empty"), filler};
-            
-            eprintln!("Filenames: {:?}", filenames);
-            eprintln!("Config: {:?}", config);
-            union_main(filenames, config).unwrap_or_else(|err| {
+            // filler has a default value of "0"
+            let filler = ubg_matches.value_of("filler").unwrap_or("0");
+            union_main(filenames, filler, ubg_matches.is_present("empty"), ubg_matches.value_of("genome")).unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             });

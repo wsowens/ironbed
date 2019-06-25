@@ -77,13 +77,14 @@ pub mod chrom_sizes {
     use std::io::{BufRead, BufReader};
     use std::collections::HashMap;
 
-    struct ChromSizes {
+    #[derive(Debug)]
+    pub struct ChromSizes {
         filename: String,
         sizes: HashMap<String, u32>,
     }
 
     impl ChromSizes {
-        fn new(filename: &str) -> Result<ChromSizes, String> {
+        pub fn new(filename: &str) -> Result<ChromSizes, String> {
             match File::open(filename) {
                 Err(msg) => Err(format!("Error with '{}': {}", filename, msg)),
                 Ok(handle) => {
@@ -387,6 +388,8 @@ pub mod bedgraph {
 pub mod union {
     use super::chrom_geo;
     use super::bedgraph::{BgIterator, BgLine};
+    use super::chrom_sizes::ChromSizes;
+
     //Each reader can have three states:
     // In - the current position of the Union interesects with the Reader at BgLine
     // Out - the current position of the Union does NOT intersect with the Reader at BgLine
@@ -401,6 +404,7 @@ pub mod union {
     pub struct UnionConfig<'a> {
         pub report_empty: bool,
         pub filler: &'a str,
+        pub genome: Option<ChromSizes>,
     }
 
     pub struct BgUnion<'a> {
@@ -413,7 +417,7 @@ pub mod union {
     impl<'a> BgUnion<'a> {
         pub fn new(readers: Vec<BgIterator>) -> Result<BgUnion<'static>, &'static str> {
             // simply call the "with_config" method using the default config below
-            let config = UnionConfig{report_empty: false, filler: "0"};
+            let config = UnionConfig{report_empty: false, filler: "0", genome: None};
             BgUnion::with_config(readers, config)
         }
         
@@ -529,7 +533,8 @@ pub mod union {
     }
 
 
-    pub fn union_main(filenames: Vec<&str>, config: UnionConfig) -> Result<(), String> {
+    pub fn union_main(filenames: Vec<&str>, filler: &str, report_empty: bool, genome_file: Option<&str>) -> Result<(), String> {
+        // open the bedgraph files
         let mut bg_iters: Vec<BgIterator> = Vec::with_capacity(filenames.len());
         for fname in filenames {
             match BgIterator::new(fname) {
@@ -537,6 +542,12 @@ pub mod union {
                 Err(e) => return Err(format!("{}: '{}'", e, fname)),
             }
         }
+        //prepare the config
+        let genome = match genome_file {
+            None => None,
+            Some(fname) => Some(ChromSizes::new(fname)?),
+        };
+        let config = UnionConfig{filler, report_empty, genome};
         let union = BgUnion::with_config(bg_iters, config)?;
         for line in union {
             println!("{}", line);
@@ -585,7 +596,7 @@ pub mod union {
                                                 "test/unionbedg/3.bg"].iter()
                                                                       .map(|name| BgIterator::new(name).unwrap())
                                                                       .collect();
-            let config = UnionConfig{report_empty: false, filler: "NA"};
+            let config = UnionConfig{report_empty: false, filler: "NA", genome: None};
             let union = BgUnion::with_config(inputs, config).unwrap();
             let expected_iterator = BgIterator::new("test/unionbedg/1+2+3.NA-filling.bg").unwrap();
             for (actual, expected) in union.zip(expected_iterator) {
@@ -600,7 +611,7 @@ pub mod union {
                                                "test/unionbedg/empty-2.bg"].iter()
                                                             .map(|name| BgIterator::new(name).unwrap())
                                                             .collect();
-            let config = UnionConfig{report_empty: false, filler: "apple"};
+            let config = UnionConfig{report_empty: false, filler: "apple", genome: None};
             let union = BgUnion::with_config(inputs, config).unwrap();
             let expected_iterator = BgIterator::new("test/unionbedg/empty-1+2.apple-filling.bg").unwrap();
             for (actual, expected) in union.zip(expected_iterator) {
