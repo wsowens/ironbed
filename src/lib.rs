@@ -18,6 +18,24 @@ mod chrom_geo {
     }
 
     impl ChromSeg {
+        //TODO should this return a result that checks for out of order points?
+        pub fn from_points(first: ChromPos, second: ChromPos) -> Result<ChromSeg, &'static str> { 
+            if first.chrom == second.chrom {
+                if first.index < second.index {
+                    Ok(ChromSeg{
+                        chrom: first.chrom,
+                        start: first.index, 
+                        stop: second.index,
+                    })
+                } else {
+                    Err("Second point must have index greater than first point.")
+                }
+            }
+            else {
+                Err("First point and second point are not on the same chromosome")
+            }
+        }
+
         pub fn start_pos(&self) -> ChromPos {
             ChromPos{chrom: self.chrom.clone(), index: self.start}
         }
@@ -69,6 +87,33 @@ mod chrom_geo {
             assert_eq!(*min, ChromPos{chrom: "chr1".to_string(), index: 3000});
             assert_eq!(*max, ChromPos{chrom: "chr4".to_string(), index: 1000});
         }
+
+        #[test]
+        fn from_points_success() {
+            let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
+            let p2 = ChromPos{chrom: "chr4".to_string(), index: 2000};
+            let actual = ChromSeg::from_points(p1, p2);
+            let expected = Ok(ChromSeg{chrom: "chr4".to_string(), start:1000, stop:2000});
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn from_points_invalid_index() {
+            let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
+            let p2 = ChromPos{chrom: "chr4".to_string(), index: 2000};
+            let actual = ChromSeg::from_points(p2, p1);
+            let expected = Err("Second point must have index greater than first point.");
+            assert_eq!(actual, expected);
+        }
+
+        #[test]
+        fn from_points_diff_chrom() {
+            let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
+            let p2 = ChromPos{chrom: "chr5".to_string(), index: 2000};
+            let actual = ChromSeg::from_points(p1, p2);
+            let expected = Err("First point and second point are not on the same chromosome");
+            assert_eq!(actual, expected);
+        }
     }
 }
 
@@ -81,46 +126,40 @@ pub mod chrom_sizes {
     use rand::seq::IteratorRandom;
     use super::chrom_geo;
 
-    #[derive(Debug)]
-    pub struct ChromSizes {
-        filename: String,
-        sizes: HashMap<String, u32>,
-    }
+    pub type ChromSizes = HashMap<String, u32>;
 
-    impl ChromSizes {
-        pub fn new(filename: &str) -> Result<ChromSizes, String> {
-            match File::open(filename) {
-                Err(msg) => Err(format!("Error with '{}': {}", filename, msg)),
-                Ok(handle) => {
-                    let handle = BufReader::new(handle);
-                    let mut sizes: HashMap<String, u32> = HashMap::new();
-                    let mut lineno = 0;
-                    for line in handle.lines() {
-                        lineno += 1;
-                        match line {
-                            Err(msg) => return Err(format!("Error with '{}': {}", filename, msg)),
-                            Ok(line) => {
-                                let cols: Vec<&str> = line.split_whitespace().collect();
-                                match cols.len() {
-                                    2 => {
-                                        match cols[1].parse() {
-                                            Ok(size) => sizes.insert(cols[0].to_string(), size),
-                                            Err(_) => return Err(format!("Error in '{}', line {}: expected unsigned integer, received '{}'", filename, lineno, cols[1])),
-                                        };
-                                    },
-                                    _ => {
-                                        return Err(format!("Error in '{}', line {}: expected exactly 2 fields, received {}", filename, lineno, cols.len()))
-                                    }
+    pub fn chromsizes_to_map(filename: &str) -> Result<HashMap<String, u32>, String> {
+        match File::open(filename) {
+            Err(msg) => Err(format!("Error with '{}': {}", filename, msg)),
+            Ok(handle) => {
+                let handle = BufReader::new(handle);
+                let mut sizes: HashMap<String, u32> = HashMap::new();
+                let mut lineno = 0;
+                for line in handle.lines() {
+                    lineno += 1;
+                    match line {
+                        Err(msg) => return Err(format!("Error with '{}': {}", filename, msg)),
+                        Ok(line) => {
+                            let cols: Vec<&str> = line.split_whitespace().collect();
+                            match cols.len() {
+                                2 => {
+                                    match cols[1].parse() {
+                                        Ok(size) => sizes.insert(cols[0].to_string(), size),
+                                        Err(_) => return Err(format!("Error in '{}', line {}: expected unsigned integer, received '{}'", filename, lineno, cols[1])),
+                                    };
+                                },
+                                _ => {
+                                    return Err(format!("Error in '{}', line {}: expected exactly 2 fields, received {}", filename, lineno, cols.len()))
                                 }
                             }
                         }
-                        
-                    }
-                    Ok(ChromSizes{filename: filename.to_string(), sizes})
+                    }   
                 }
+                Ok(sizes)
             }
         }
-
+    }/*
+        //TODO: remove these functions and put them into a new module?
         //TODO: make this a generic Rng
         pub fn random_pos(&self, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromPos {
             let size_iter = self.sizes.iter();
@@ -137,13 +176,12 @@ pub mod chrom_sizes {
             let stop = rng.gen_range(start, size+1);
             chrom_geo::ChromSeg{chrom: chrom.to_string(), start, stop}
         }
-    }
-
+    */
     pub fn random_bed_main(filename: &str) -> Result<(), String> {
-        let chrom_sizes = ChromSizes::new(filename)?;
+        let chrom_sizes = chromsizes_to_map(filename)?;
         let mut rng = rand::thread_rng();
         loop {
-            let line = format!("{}\n", chrom_sizes.random_seg(&mut rng));
+            let line = format!("{}\n", "temp".to_string());
             //attempt to write
             //handle the BrokenPipe error elegantly so that this command can
             //be used in a pipeline
@@ -165,7 +203,7 @@ pub mod chrom_sizes {
 
         #[test]
         fn test_hg38_chrom_sizes() {
-            let hg38 = ChromSizes::new("test/chrom.sizes/hg38.chrom.sizes").unwrap();
+            let hg38 = chromsizes_to_map("test/chrom.sizes/hg38.chrom.sizes").unwrap();
             let pairs: Vec<(&str, u32)> = vec![("chr1", 248956422),
                                                ("chr2", 242193529),
                                                ("chrX", 156040895),
@@ -174,14 +212,14 @@ pub mod chrom_sizes {
                                                ("chrUn_KI270580v1", 1553),
                                                ("chrUn_KI270394v1", 970)];
             for (chrom, size) in pairs {
-                assert_eq!(hg38.sizes.get(chrom).unwrap(), &size);
+                assert_eq!(hg38.get(chrom).unwrap(), &size);
             }
             
         }
 
         #[test]
         fn test_tair10_chrom_sizes() {
-            let tair10 = ChromSizes::new("test/chrom.sizes/tair10.chrom.sizes").unwrap();
+            let tair10 = chromsizes_to_map("test/chrom.sizes/tair10.chrom.sizes").unwrap();
             let pairs: Vec<(&str, u32)> = vec![("Chr1", 30427671),
                                                ("Chr2", 19698289),
                                                ("Chr3", 23459830),
@@ -190,57 +228,57 @@ pub mod chrom_sizes {
                                                ("ChrC", 154478),
                                                ("ChrM", 366924),];
             for (chrom, size) in pairs {
-                assert_eq!(tair10.sizes.get(chrom).unwrap(), &size);
+                assert_eq!(tair10.get(chrom).unwrap(), &size);
             }
         }
 
         #[test]
         fn chrom_sizes_not_exist() {
             let expect = String::from("Error with 'test/chrom.sizes/does_not_exist': No such file or directory (os error 2)");
-            if let Err(msg) = ChromSizes::new("test/chrom.sizes/does_not_exist") {
+            if let Err(msg) = chromsizes_to_map("test/chrom.sizes/does_not_exist") {
                 assert_eq!(msg, expect)
             } else {
-                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+                panic!("Expected Err from chromsizes_to_map(), received Ok(_) instead");
             }
         }
 
         #[test]
         fn test_badfield1_chrom_sizes() {
             let expect = String::from("Error in 'test/chrom.sizes/bad_field1.chrom.sizes', line 6: expected exactly 2 fields, received 1");
-            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_field1.chrom.sizes") {
+            if let Err(msg) = chromsizes_to_map("test/chrom.sizes/bad_field1.chrom.sizes") {
                 assert_eq!(msg, expect)
             } else {
-                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+                panic!("Expected Err from chromsizes_to_map(), received Ok(_) instead");
             }
         }
 
         #[test]
         fn test_badfield2_chrom_sizes() {
             let expect = String::from("Error in 'test/chrom.sizes/bad_field2.chrom.sizes', line 3: expected exactly 2 fields, received 3");
-            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_field2.chrom.sizes") {
+            if let Err(msg) = chromsizes_to_map("test/chrom.sizes/bad_field2.chrom.sizes") {
                 assert_eq!(msg, expect)
             } else {
-                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+                panic!("Expected Err from chromsizes_to_map(), received Ok(_) instead");
             }
         }
 
         #[test]
         fn test_badsize1_chrom_sizes() {
             let expect = String::from("Error in 'test/chrom.sizes/bad_size1.chrom.sizes', line 2: expected unsigned integer, received '-19698289'");
-            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_size1.chrom.sizes") {
+            if let Err(msg) = chromsizes_to_map("test/chrom.sizes/bad_size1.chrom.sizes") {
                 assert_eq!(msg, expect)
             } else {
-                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+                panic!("Expected Err from chromsizes_to_map(), received Ok(_) instead");
             }
         }
 
         #[test]
         fn test_badsize2_chrom_sizes() {
             let expect = String::from("Error in 'test/chrom.sizes/bad_size2.chrom.sizes', line 4: expected unsigned integer, received 'apple'");
-            if let Err(msg) = ChromSizes::new("test/chrom.sizes/bad_size2.chrom.sizes") {
+            if let Err(msg) = chromsizes_to_map("test/chrom.sizes/bad_size2.chrom.sizes") {
                 assert_eq!(msg, expect)
             } else {
-                panic!("Expected Err from ChromSizes::new(), received Ok(_) instead");
+                panic!("Expected Err from chromsizes_to_map(), received Ok(_) instead");
             }
         }
     }
@@ -427,7 +465,7 @@ pub mod bedgraph {
 pub mod union {
     use super::chrom_geo;
     use super::bedgraph::{BgIterator, BgLine};
-    use super::chrom_sizes::ChromSizes;
+    use super::chrom_sizes::{chromsizes_to_map, ChromSizes};
 
     //Each reader can have three states:
     // In - the current position of the Union interesects with the Reader at BgLine
@@ -584,7 +622,7 @@ pub mod union {
         //prepare the config
         let genome = match genome_file {
             None => None,
-            Some(fname) => Some(ChromSizes::new(fname)?),
+            Some(fname) => Some(chromsizes_to_map(fname)?),
         };
         let config = UnionConfig{filler, report_empty, genome};
         let union = BgUnion::with_config(bg_iters, config)?;
