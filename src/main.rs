@@ -4,6 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 use ironbed::union::union_main;
+use ironbed::chrom_sizes::random_bed_main;
 
 
 fn main() {
@@ -60,7 +61,12 @@ fn main() {
             });
         },
         ("random", Some(rand_matches)) => {
-            
+            //this operation is safe because --genome is required
+            let fname = rand_matches.value_of("genome").unwrap();
+            random_bed_main(fname).unwrap_or_else(|err| {
+                eprintln!("{}", err);
+                std::process::exit(1);
+            })
         }
         ("", None) => eprintln!("No subcommand provided. Try 'ironbed help' for available subcommands."),
         _ => unreachable!(),

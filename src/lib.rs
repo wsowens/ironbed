@@ -76,6 +76,9 @@ pub mod chrom_sizes {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
     use std::collections::{HashMap, BinaryHeap};
+    extern crate rand;
+    use rand::Rng;
+    use rand::seq::IteratorRandom;
     use super::chrom_geo;
 
     #[derive(Debug)]
@@ -89,7 +92,7 @@ pub mod chrom_sizes {
             match File::open(filename) {
                 Err(msg) => Err(format!("Error with '{}': {}", filename, msg)),
                 Ok(handle) => {
-                    let mut handle = BufReader::new(handle);
+                    let handle = BufReader::new(handle);
                     let mut sizes: HashMap<String, u32> = HashMap::new();
                     let mut lineno = 0;
                     for line in handle.lines() {
@@ -118,10 +121,30 @@ pub mod chrom_sizes {
             }
         }
 
-        pub fn random_pos(&self) -> chrom_geo::ChromPos {
-            //TODO
-            chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 100}
+        //TODO: make this a generic Rng
+        pub fn random_pos(&self, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromPos {
+            let size_iter = self.sizes.iter();
+            let (chrom, size) = size_iter.choose(rng).unwrap();
+            let index = rng.gen_range(0, size);
+            chrom_geo::ChromPos{chrom: chrom.to_string(), index}
         } 
+
+        //TODO: make this a generic Rng
+        pub fn random_seg(&self, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromSeg {
+            let size_iter = self.sizes.iter();
+            let (chrom, size) = size_iter.choose(rng).unwrap();
+            let start = rng.gen_range(0, size);
+            let stop = rng.gen_range(start, size+1);
+            chrom_geo::ChromSeg{chrom: chrom.to_string(), start, stop}
+        }
+    }
+
+    pub fn random_bed_main(filename: &str) -> Result<(), String> {
+        let chrom_sizes = ChromSizes::new(filename)?;
+        let mut rng = rand::thread_rng();
+        loop {
+            println!("{}", chrom_sizes.random_seg(&mut rng));
+        }
     }
 
     #[cfg(test)]
