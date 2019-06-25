@@ -74,7 +74,7 @@ mod chrom_geo {
 
 pub mod chrom_sizes {
     use std::fs::File;
-    use std::io::{BufRead, BufReader};
+    use std::io::{Write, BufRead, BufReader};
     use std::collections::{HashMap, BinaryHeap};
     extern crate rand;
     use rand::Rng;
@@ -143,7 +143,19 @@ pub mod chrom_sizes {
         let chrom_sizes = ChromSizes::new(filename)?;
         let mut rng = rand::thread_rng();
         loop {
-            println!("{}", chrom_sizes.random_seg(&mut rng));
+            let line = format!("{}\n", chrom_sizes.random_seg(&mut rng));
+            //attempt to write
+            //handle the BrokenPipe error elegantly so that this command can
+            //be used in a pipeline
+            std::io::stdout().write(line.as_bytes()).unwrap_or_else(|err| {
+                match err.kind() {
+                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+                    _ => {
+                        eprintln!("{}", err);
+                        std::process::exit(1);
+                    }
+                }
+            });
         }
     }
 
