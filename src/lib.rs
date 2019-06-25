@@ -188,7 +188,7 @@ pub mod chrom_sizes {
             //attempt to write
             //handle the BrokenPipe error elegantly so that this command can
             //be used in a pipeline
-            output.write_all(line.as_bytes()).unwrap_or_else(|err| {
+            output.write(line.as_bytes()).unwrap_or_else(|err| {
                 match err.kind() {
                     std::io::ErrorKind::BrokenPipe => std::process::exit(0),
                     _ => {
