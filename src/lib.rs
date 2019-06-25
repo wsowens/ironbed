@@ -117,14 +117,78 @@ mod chrom_geo {
     }
 }
 
-pub mod chrom_sizes {
-    use std::fs::File;
-    use std::io::{Write, BufWriter, BufRead, BufReader};
-    use std::collections::{HashMap};
+pub mod random {
+    use std::io::{Write, BufWriter};
     extern crate rand;
     use rand::Rng;
     use rand::seq::SliceRandom;
     use super::chrom_geo;
+    use super::chrom_sizes;
+     
+    pub fn random_pos(sizes: &Vec<(String, u32)>, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromPos {
+        let (chrom, size) = sizes.choose(rng).unwrap();
+        let index = rng.gen_range(0, size);
+        chrom_geo::ChromPos{chrom: chrom.to_string(), index}
+    } 
+
+    //TODO: make this a generic Rng
+    pub fn random_seg(sizes: &Vec<(String, u32)>, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromSeg {
+            let (chrom, size) = sizes.choose(rng).unwrap();
+            let start = rng.gen_range(0, size);
+            let stop = rng.gen_range(start, size+1);
+            chrom_geo::ChromSeg{chrom: chrom.clone(), start, stop}
+    }
+
+    pub fn rand_bed_inf(filename: &str) -> Result<(), String> {
+        let chrom_sizes = chrom_sizes::chromsizes_to_map(filename)?;
+        let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
+        let mut rng = rand::thread_rng();
+        let mut output = BufWriter::new(std::io::stdout());
+        loop {
+            let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
+            //attempt to write
+            //handle the BrokenPipe error elegantly so that this command can
+            //be used in a pipeline
+            output.write(line.as_bytes()).unwrap_or_else(|err| {
+                match err.kind() {
+                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+                    _ => {
+                        eprintln!("{}", err);
+                        std::process::exit(1);
+                    }
+                }
+            });
+        }
+    }
+
+    pub fn rand_bed_with_lines(filename: &str, num_lines: usize) -> Result<(), String> {
+        let chrom_sizes = chrom_sizes::chromsizes_to_map(filename)?;
+        let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
+        let mut rng = rand::thread_rng();
+        let mut output = BufWriter::new(std::io::stdout());
+        for _ in 0..num_lines {
+            let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
+            //attempt to write
+            //handle the BrokenPipe error elegantly so that this command can
+            //be used in a pipeline
+            output.write(line.as_bytes()).unwrap_or_else(|err| {
+                match err.kind() {
+                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+                    _ => {
+                        eprintln!("{}", err);
+                        std::process::exit(1);
+                    }
+                }
+            });
+        }
+        Ok(())
+    }
+}
+
+pub mod chrom_sizes {
+    use std::fs::File;
+    use std::io::{BufRead, BufReader};
+    use std::collections::{HashMap};
 
     pub type ChromSizes = HashMap<String, u32>;
 
@@ -157,46 +221,6 @@ pub mod chrom_sizes {
                 }
                 Ok(sizes)
             }
-        }
-    }
-    /*
-        //TODO: remove these functions and put them into a new module?
-        //TODO: make this a generic Rng
-        pub fn random_pos(&self, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromPos {
-            let size_iter = self.sizes.iter();
-            let (chrom, size) = size_iter.choose(rng).unwrap();
-            let index = rng.gen_range(0, size);
-            chrom_geo::ChromPos{chrom: chrom.to_string(), index}
-        } 
-    */
-
-    //TODO: make this a generic Rng
-    pub fn random_seg(sizes: &Vec<(String, u32)>, rng: &mut rand::prelude::ThreadRng) -> chrom_geo::ChromSeg {
-            let (chrom, size) = sizes.choose(rng).unwrap();
-            let start = rng.gen_range(0, size);
-            let stop = rng.gen_range(start, size+1);
-            chrom_geo::ChromSeg{chrom: chrom.clone(), start, stop}
-    }
-
-    pub fn random_bed_main(filename: &str) -> Result<(), String> {
-        let chrom_sizes = chromsizes_to_map(filename)?;
-        let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
-        let mut rng = rand::thread_rng();
-        let mut output = BufWriter::new(std::io::stdout());
-        loop {
-            let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
-            //attempt to write
-            //handle the BrokenPipe error elegantly so that this command can
-            //be used in a pipeline
-            output.write(line.as_bytes()).unwrap_or_else(|err| {
-                match err.kind() {
-                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
-                    _ => {
-                        eprintln!("{}", err);
-                        std::process::exit(1);
-                    }
-                }
-            });
         }
     }
 

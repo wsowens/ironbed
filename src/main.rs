@@ -4,7 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 use ironbed::union::union_main;
-use ironbed::chrom_sizes::random_bed_main;
+use ironbed::random::{rand_bed_inf, rand_bed_with_lines};
 
 
 fn main() {
@@ -46,7 +46,13 @@ fn main() {
                                            .takes_value(true)
                                            .required(true)
                                            .value_name("FILE")
-                                           .help("Use genome file <FILE> for random values")))
+                                           .help("Use genome file <FILE> for random values"))
+                                      .arg(Arg::with_name("lines")
+                                           .short("n")
+                                           .long("lines")
+                                           .takes_value(true)
+                                           .value_name("NUM")
+                                           .help("Output <NUM> lines [default: infinite]")))
                           .get_matches();
 
     match matches.subcommand() {
@@ -63,7 +69,16 @@ fn main() {
         ("random", Some(rand_matches)) => {
             //this operation is safe because --genome is required
             let fname = rand_matches.value_of("genome").unwrap();
-            random_bed_main(fname).unwrap_or_else(|err| {
+            match rand_matches.value_of("lines") {
+                //if no lines provided, generate an infinite bed
+                None => rand_bed_inf(fname),
+                //otherwise, grab the number of lines
+                Some(n) => match n.parse() {
+                    Err(_) => Err(format!("Expected unsigned integer for --lines, received '{}'", n)),
+                    Ok(n) => rand_bed_with_lines(fname, n),
+                }
+            //unwrap if any errors occurred
+            }.unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             })
