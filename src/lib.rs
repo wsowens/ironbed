@@ -75,7 +75,8 @@ mod chrom_geo {
 pub mod chrom_sizes {
     use std::fs::File;
     use std::io::{BufRead, BufReader};
-    use std::collections::HashMap;
+    use std::collections::{HashMap, BinaryHeap};
+    use super::chrom_geo;
 
     #[derive(Debug)]
     pub struct ChromSizes {
@@ -116,6 +117,11 @@ pub mod chrom_sizes {
                 }
             }
         }
+
+        pub fn random_pos(&self) -> chrom_geo::ChromPos {
+            //TODO
+            chrom_geo::ChromPos{chrom: "chr1".to_string(), index: 100}
+        } 
     }
 
     #[cfg(test)]

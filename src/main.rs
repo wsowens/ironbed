@@ -44,6 +44,7 @@ fn main() {
                                            .long("genome")
                                            .takes_value(true)
                                            .required(true)
+                                           .value_name("FILE")
                                            .help("Use genome file <FILE> for random values")))
                           .get_matches();
 
@@ -59,8 +60,8 @@ fn main() {
             });
         },
         ("random", Some(rand_matches)) => {
-
-        },
+            
+        }
         ("", None) => eprintln!("No subcommand provided. Try 'ironbed help' for available subcommands."),
         _ => unreachable!(),
     }
