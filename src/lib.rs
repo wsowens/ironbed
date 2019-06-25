@@ -91,15 +91,11 @@ pub mod chrom_sizes {
                     let mut handle = BufReader::new(handle);
                     let mut sizes: HashMap<String, u32> = HashMap::new();
                     let mut lineno = 0;
-                    loop {
+                    for line in handle.lines() {
                         lineno += 1;
-                        let mut line = String::new();
-                        match handle.read_line(&mut line) {
+                        match line {
                             Err(msg) => return Err(format!("Error with '{}': {}", filename, msg)),
-                            Ok(0) => {
-                                return Ok(ChromSizes{filename: filename.to_string(), sizes});
-                            }
-                            _ => {
+                            Ok(line) => {
                                 let cols: Vec<&str> = line.split_whitespace().collect();
                                 match cols.len() {
                                     2 => {
@@ -114,7 +110,9 @@ pub mod chrom_sizes {
                                 }
                             }
                         }
+                        
                     }
+                    Ok(ChromSizes{filename: filename.to_string(), sizes})
                 }
             }
         }
