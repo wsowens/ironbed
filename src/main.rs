@@ -36,7 +36,7 @@ fn main() {
             //this operation is safe because get_matches() will halt execution if '-i' is not provided
             let filenames: Vec<&str> = ubg_matches.values_of("input").unwrap().collect();
             let filler = match ubg_matches.value_of("filler") {
-                Some(fill_value) => fill_value.clone(),
+                Some(fill_value) => fill_value,
                 None => "0",
             };
             let config = UnionConfig{report_empty: ubg_matches.is_present("empty"), filler};

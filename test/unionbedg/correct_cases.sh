@@ -9,5 +9,5 @@ bedtools unionbedg -i 1.bg 2.bg 3.bg > 1+2+3.bg
 bedtools unionbedg -i empty-1.bg empty-2.bg > empty-1+2.bg
 #TODO: replace this when you have a "random"
 
-bedtools unionbedg -i 1.bg 2.bg 3.bg > 1+2+3.bg
-bedtools unionbedg -i empty-1.bg empty-2.bg > empty-1+2.bg
+bedtools unionbedg -filler NA -i 1.bg 2.bg 3.bg > 1+2+3.NA-filling.bg
+bedtools unionbedg -filler apple -i empty-1.bg empty-2.bg > empty-1+2.apple-filling.bg

@@ -577,5 +577,35 @@ pub mod union {
                 assert_eq!(actual, expected);
             }
         }
+
+        #[test]
+        fn union_filler1() {
+            let inputs: Vec<BgIterator> = vec!["test/unionbedg/1.bg", 
+                                               "test/unionbedg/2.bg",
+                                                "test/unionbedg/3.bg"].iter()
+                                                                      .map(|name| BgIterator::new(name).unwrap())
+                                                                      .collect();
+            let config = UnionConfig{report_empty: false, filler: "NA"};
+            let union = BgUnion::with_config(inputs, config).unwrap();
+            let expected_iterator = BgIterator::new("test/unionbedg/1+2+3.NA-filling.bg").unwrap();
+            for (actual, expected) in union.zip(expected_iterator) {
+                assert_eq!(actual, expected);
+            }
+        }
+        
+        #[test]
+        fn union_filler2() {
+            //gather the correct inputs into a union
+            let inputs: Vec<BgIterator> = vec!["test/unionbedg/empty-1.bg",
+                                               "test/unionbedg/empty-2.bg"].iter()
+                                                            .map(|name| BgIterator::new(name).unwrap())
+                                                            .collect();
+            let config = UnionConfig{report_empty: false, filler: "apple"};
+            let union = BgUnion::with_config(inputs, config).unwrap();
+            let expected_iterator = BgIterator::new("test/unionbedg/empty-1+2.apple-filling.bg").unwrap();
+            for (actual, expected) in union.zip(expected_iterator) {
+                assert_eq!(actual, expected);
+            }
+        }
     }
 }

@@ -1,0 +1,7 @@
+chr1	1000	1300	0	0
+chr1	1300	1500	0	apple
+chr1	2000	2100	0	apple
+chr1	2150	2200	apple	0
+chr1	40000	50000	apple	0
+chr1	55000	56050	apple	0
+chr1	123523	423433	0	apple
