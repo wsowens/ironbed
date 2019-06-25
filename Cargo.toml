@@ -2,6 +2,8 @@
 name = "ironbed"
 version = "0.1.0"
 authors = ["wow"]
+edition = "2018"
 
 [dependencies]
 clap = "2.33"
+rand = "0.6"
