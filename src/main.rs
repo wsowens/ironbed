@@ -4,7 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 use ironbed::union::union_main;
-use ironbed::random::{rand_bed, rand_bed_sorted};
+use ironbed::random::{rand_bed, rand_bed_sorted_uniq};
 
 
 fn main() {
@@ -82,7 +82,7 @@ fn main() {
                 })
             };
             if rand_matches.is_present("sorted") {
-                rand_bed_sorted(fname, n_lines)
+                rand_bed_sorted_uniq(fname, n_lines)
             } else {
                 rand_bed(fname, n_lines)
             //check any errors

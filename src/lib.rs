@@ -91,7 +91,7 @@ mod chrom_geo {
         fn from_points_success() {
             let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
             let p2 = ChromPos{chrom: "chr4".to_string(), index: 2000};
-            let actual = ChromSeg::from_points(p1, p2);
+            let actual = ChromSeg::from_points(p1, &p2);
             let expected = Ok(ChromSeg{chrom: "chr4".to_string(), start:1000, stop:2000});
             assert_eq!(actual, expected);
         }
@@ -100,7 +100,7 @@ mod chrom_geo {
         fn from_points_invalid_index() {
             let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
             let p2 = ChromPos{chrom: "chr4".to_string(), index: 2000};
-            let actual = ChromSeg::from_points(p2, p1);
+            let actual = ChromSeg::from_points(p2, &p1);
             let expected = Err("Second point must have index greater than first point.");
             assert_eq!(actual, expected);
         }
@@ -109,7 +109,7 @@ mod chrom_geo {
         fn from_points_diff_chrom() {
             let p1 = ChromPos{chrom: "chr4".to_string(), index: 1000};
             let p2 = ChromPos{chrom: "chr5".to_string(), index: 2000};
-            let actual = ChromSeg::from_points(p1, p2);
+            let actual = ChromSeg::from_points(p1, &p2);
             let expected = Err("First point and second point are not on the same chromosome");
             assert_eq!(actual, expected);
         }
@@ -118,7 +118,7 @@ mod chrom_geo {
 
 pub mod random {
     use std::io::{Write, BufWriter};
-    use std::collections::BinaryHeap;
+    use std::collections::{BinaryHeap, BTreeSet};
     use std::cmp::Reverse;
     extern crate rand;
     use rand::Rng;
@@ -173,10 +173,6 @@ pub mod random {
         for _ in 0..num_lines*2 {
             chrom_heap.push(Reverse(random_pos(&sizes, &mut rng)));
         }
-        /*
-        while let Some(pos) = chrom_heap.pop() {
-            println!("{:?}", pos.0);
-        };*/
         let mut output = BufWriter::new(std::io::stdout());
         while !chrom_heap.is_empty() {
             //these operations are both safe, because heap is not empty
@@ -202,6 +198,43 @@ pub mod random {
                 }
             });
         }
+        Ok(())
+    }
+
+    pub fn rand_bed_sorted_uniq(filename: &str, num_lines: usize) -> Result<(), String> {
+        let mut rng = rand::thread_rng();
+        let sizes = chrom_sizes::chromsizes_to_map(filename)?;
+        let sizes: Vec<(String, u32)> = sizes.into_iter().collect();
+        let mut chrom_set = BTreeSet::<chrom_geo::ChromPos>::new();
+        while chrom_set.len() < num_lines * 2 {
+            chrom_set.insert(random_pos(&sizes, &mut rng));
+        }
+        let evens = chrom_set.iter().cloned().step_by(2);
+        let odds = chrom_set.iter().skip(1).step_by(2);
+        let mut output = BufWriter::new(std::io::stdout());
+        //TODO: turn this into a trait
+        /*
+        for (p1, p2) in evens.zip(odds) {
+            let seg = match chrom_geo::ChromSeg::from_points(p1, p2) {
+                //chrom_seg is good
+                Ok(seg) => seg,
+                //chrom_seg not good (likely due to non-matching chromosomes)
+                Err(_) => {
+                    chrom_geo::ChromSeg{chrom: p2.chrom.clone(), start: 0, stop: p2.index}
+                }
+            };
+            let line = format!("{}\n", seg);
+            output.write(line.as_bytes()).unwrap_or_else(|err| {
+                match err.kind() {
+                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
+                    _ => {
+                        eprintln!("{}", err);
+                        std::process::exit(1);
+                    }
+                }
+            });
+        }
+        */
         Ok(())
     }
 }
