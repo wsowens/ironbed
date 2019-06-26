@@ -1,0 +1,17 @@
+# Heap based approach
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 1000000 > /dev/null
+real 4.11
+user 3.54
+sys 0.56
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 1000000 > test.bed
+real 4.18
+user 3.51
+sys 0.65
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 10000000 > /dev/null
+real 55.96
+user 49.81
+sys 5.68
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 10000000 > test.bed
+real 57.89
+user 51.15
+sys 6.32

@@ -1,0 +1,28 @@
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000
+real 204.90
+user 2.43
+sys 5.78
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 10.86
+user 3.37
+sys 7.03
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 9.09
+user 2.25
+sys 6.56
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 8.35
+user 1.70
+sys 6.59
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 0.58
+user 0.53
+sys 0.03
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000
+real 205.33
+user 0.96
+sys 0.10
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 0.59
+user 0.53
+sys 0.06

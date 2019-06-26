@@ -1,0 +1,17 @@
+# BTree based approach (guaranteed to be non-overlapping)
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 1000000 > /dev/null
+real 4.61
+user 3.75
+sys 0.65
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 1000000 > test.bed
+real 4.00
+user 3.10
+sys 0.79
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 10000000 > /dev/null
+real 56.37
+user 50.53
+sys 5.35
+target/release/ironbed random -g test/chrom.sizes/hg38-short.chrom.sizes -s  -n 10000000 > test.bed
+real 60.42
+user 52.81
+sys 6.59

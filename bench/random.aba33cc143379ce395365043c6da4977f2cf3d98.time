@@ -1,0 +1,8 @@
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000
+real 248.12
+user 2.60
+sys 6.78
+target/release/ironbed random --genome test/chrom.sizes/hg38.main.chrom.sizes | head -n1000000 > /dev/null
+real 8.58
+user 1.68
+sys 6.67
