@@ -4,7 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 use ironbed::union::union_main;
-use ironbed::random::{rand_bed_inf, rand_bed_with_lines};
+use ironbed::random::rand_bed;
 
 
 fn main() {
@@ -69,16 +69,14 @@ fn main() {
         ("random", Some(rand_matches)) => {
             //this operation is safe because --genome is required
             let fname = rand_matches.value_of("genome").unwrap();
-            match rand_matches.value_of("lines") {
-                //if no lines provided, generate an infinite bed
-                None => rand_bed_inf(fname),
-                //otherwise, grab the number of lines
-                Some(n) => match n.parse() {
-                    Err(_) => Err(format!("Expected unsigned integer for --lines, received '{}'", n)),
-                    Ok(n) => rand_bed_with_lines(fname, n),
-                }
-            //unwrap if any errors occurred
-            }.unwrap_or_else(|err| {
+            let n_lines = match rand_matches.value_of("lines") {
+                None => usize::max_value(),
+                Some(n) => n.parse().unwrap_or_else(| _ | {
+                    eprintln!("Expected unsigned integer for --lines, received '{}'", n);
+                    std::process::exit(1);
+                })
+            };
+            rand_bed(fname, n_lines).unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             })

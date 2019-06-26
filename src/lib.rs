@@ -139,33 +139,12 @@ pub mod random {
             chrom_geo::ChromSeg{chrom: chrom.clone(), start, stop}
     }
 
-    pub fn rand_bed_inf(filename: &str) -> Result<(), String> {
+    pub fn rand_bed(filename: &str, num_lines: usize) -> Result<(), String> {
         let chrom_sizes = chrom_sizes::chromsizes_to_map(filename)?;
         let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
         let mut rng = rand::thread_rng();
         let mut output = BufWriter::new(std::io::stdout());
-        loop {
-            let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
-            //attempt to write
-            //handle the BrokenPipe error elegantly so that this command can
-            //be used in a pipeline
-            output.write(line.as_bytes()).unwrap_or_else(|err| {
-                match err.kind() {
-                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
-                    _ => {
-                        eprintln!("{}", err);
-                        std::process::exit(1);
-                    }
-                }
-            });
-        }
-    }
-
-    pub fn rand_bed_with_lines(filename: &str, num_lines: usize) -> Result<(), String> {
-        let chrom_sizes = chrom_sizes::chromsizes_to_map(filename)?;
-        let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
-        let mut rng = rand::thread_rng();
-        let mut output = BufWriter::new(std::io::stdout());
+        eprintln!("{}", num_lines);
         for _ in 0..num_lines {
             let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
             //attempt to write
