@@ -201,6 +201,16 @@ pub mod random {
         Ok(())
     }
 
+    struct Pairwise<T: Iterator>(T);
+
+    impl<T: Iterator> Iterator for Pairwise<T> {
+        type Item = (T::Item, T::Item);
+
+        fn next(&mut self) -> Option<Self::Item> {
+            Some((self.0.next()?, self.0.next()?))
+        }
+    }
+
     pub fn rand_bed_sorted_uniq(filename: &str, num_lines: usize) -> Result<(), String> {
         let mut rng = rand::thread_rng();
         let sizes = chrom_sizes::chromsizes_to_map(filename)?;
@@ -209,13 +219,10 @@ pub mod random {
         while chrom_set.len() < num_lines * 2 {
             chrom_set.insert(random_pos(&sizes, &mut rng));
         }
-        let evens = chrom_set.iter().cloned().step_by(2);
-        let odds = chrom_set.iter().skip(1).step_by(2);
+
         let mut output = BufWriter::new(std::io::stdout());
-        //TODO: turn this into a trait
-        /*
-        for (p1, p2) in evens.zip(odds) {
-            let seg = match chrom_geo::ChromSeg::from_points(p1, p2) {
+        for (p1, p2) in Pairwise(chrom_set.into_iter()) {
+            let seg = match chrom_geo::ChromSeg::from_points(p1, &p2) {
                 //chrom_seg is good
                 Ok(seg) => seg,
                 //chrom_seg not good (likely due to non-matching chromosomes)
@@ -234,7 +241,6 @@ pub mod random {
                 }
             });
         }
-        */
         Ok(())
     }
 }
