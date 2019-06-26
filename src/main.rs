@@ -4,7 +4,7 @@ extern crate clap;
 
 use clap::{Arg, App, SubCommand};
 use ironbed::union::union_main;
-use ironbed::random::rand_bed;
+use ironbed::random::{rand_bed, rand_bed_sorted};
 
 
 fn main() {
@@ -52,7 +52,12 @@ fn main() {
                                            .long("lines")
                                            .takes_value(true)
                                            .value_name("NUM")
-                                           .help("Output <NUM> lines [default: infinite]")))
+                                           .help("Output <NUM> lines [default: infinite]"))
+                                      .arg(Arg::with_name("sorted")
+                                           .short("s")
+                                           .long("--sorted")
+                                           .requires("lines")
+                                           .help("Output as sorted, non-intersecting BED [requires --lines]")))
                           .get_matches();
 
     match matches.subcommand() {
@@ -76,7 +81,12 @@ fn main() {
                     std::process::exit(1);
                 })
             };
-            rand_bed(fname, n_lines).unwrap_or_else(|err| {
+            if rand_matches.is_present("sorted") {
+                rand_bed_sorted(fname, n_lines)
+            } else {
+                rand_bed(fname, n_lines)
+            //check any errors
+            }.unwrap_or_else(|err| {
                 eprintln!("{}", err);
                 std::process::exit(1);
             })
