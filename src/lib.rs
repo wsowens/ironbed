@@ -118,8 +118,7 @@ mod chrom_geo {
 
 pub mod random {
     use std::io::{Write, BufWriter};
-    use std::collections::{BinaryHeap, BTreeSet};
-    use std::cmp::Reverse;
+    use std::collections::{BTreeSet};
     extern crate rand;
     use rand::Rng;
     use rand::seq::SliceRandom;
@@ -145,7 +144,6 @@ pub mod random {
         let chrom_sizes = chrom_sizes::chromsizes_to_map(filename)?;
         let chrom_size_list: Vec<(String, u32)> = chrom_sizes.into_iter().collect();
         let mut output = BufWriter::new(std::io::stdout());
-        eprintln!("{}", num_lines);
         for _ in 0..num_lines {
             let line = format!("{}\n", random_seg(&chrom_size_list, &mut rng));
             //attempt to write
@@ -164,45 +162,10 @@ pub mod random {
         Ok(())
     }
 
-    pub fn rand_bed_sorted(filename: &str, num_lines: usize) -> Result<(), String> {
-        let mut rng = rand::thread_rng();
-        let sizes = chrom_sizes::chromsizes_to_map(filename)?;
-        let sizes: Vec<(String, u32)> = sizes.into_iter().collect();
-        let mut chrom_heap = BinaryHeap::<Reverse<chrom_geo::ChromPos>>::new();
-        //to avoid overlapping regions, we generate 2*n points and simply connect them
-        for _ in 0..num_lines*2 {
-            chrom_heap.push(Reverse(random_pos(&sizes, &mut rng)));
-        }
-        let mut output = BufWriter::new(std::io::stdout());
-        while !chrom_heap.is_empty() {
-            //these operations are both safe, because heap is not empty
-            //and we know that the chrom_heap has an even number of items
-            let p1 = chrom_heap.pop().unwrap().0;
-            let p2 = chrom_heap.pop().unwrap().0;
-            let seg = match chrom_geo::ChromSeg::from_points(p1, &p2) {
-                //chrom_seg is good
-                Ok(seg) => seg,
-                //chrom_seg not good (likely due to non-matching chromosomes)
-                Err(_) => {
-                    chrom_geo::ChromSeg{chrom: p2.chrom, start: 0, stop: p2.index}
-                }
-            };
-            let line = format!("{}\n", seg);
-            output.write(line.as_bytes()).unwrap_or_else(|err| {
-                match err.kind() {
-                    std::io::ErrorKind::BrokenPipe => std::process::exit(0),
-                    _ => {
-                        eprintln!("{}", err);
-                        std::process::exit(1);
-                    }
-                }
-            });
-        }
-        Ok(())
-    }
-
+    //define a Pairwise extension trait for iterators
     struct Pairwise<T: Iterator>(T);
 
+    //impl Pairwise, which allows Iterators to produce pairs
     impl<T: Iterator> Iterator for Pairwise<T> {
         type Item = (T::Item, T::Item);
 
@@ -211,13 +174,19 @@ pub mod random {
         }
     }
 
-    pub fn rand_bed_sorted_uniq(filename: &str, num_lines: usize) -> Result<(), String> {
+    //this approach uses a BTreeSet, whereas previous approach used a heap
+    //this approach is marginally (~2%) slower than the heap approach, but it 
+    //guarantees that points are non-duplicate
+    pub fn rand_bed_sorted(filename: &str, num_lines: usize) -> Result<(), String> {
         let mut rng = rand::thread_rng();
         let sizes = chrom_sizes::chromsizes_to_map(filename)?;
         let sizes: Vec<(String, u32)> = sizes.into_iter().collect();
         let mut chrom_set = BTreeSet::<chrom_geo::ChromPos>::new();
         while chrom_set.len() < num_lines * 2 {
+            let len = chrom_set.len();
             chrom_set.insert(random_pos(&sizes, &mut rng));
+            if len == chrom_set.len() {
+            }
         }
 
         let mut output = BufWriter::new(std::io::stdout());
